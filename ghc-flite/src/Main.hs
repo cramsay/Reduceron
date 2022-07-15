@@ -8,9 +8,10 @@ import DynFlags
 import CoreSyn
 -- for printing
 import GHC.IO.Handle.FD (stdout)
-import Outputable (ppr, printForAsm)
+import Pretty (Mode(..))
+import Outputable (ppr, printSDocLn, mkCodeStyle, CodeStyle(..))
 
-import GHC-Flite.Translate (translate)
+import GHCFlite.Translate (translate)
 
 import Flite.Pretty
 
@@ -27,5 +28,5 @@ coreModule fileName = do
     dflags <- getSessionDynFlags
     setSessionDynFlags dflags
     core <- compileToCoreSimplified fileName
-    liftIO . printForAsm dflags stdout . ppr $ cm_binds core
+    liftIO . printSDocLn LeftMode dflags stdout (mkCodeStyle AsmStyle) . ppr $ cm_binds core
     return core

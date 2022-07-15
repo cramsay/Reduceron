@@ -1,13 +1,13 @@
-module GHC-Flite.Translate where
+module GHCFlite.Translate where
 
 import qualified Flite.Syntax as Flite
 
 import CoreSyn (Alt, AltCon (..), Bind (..), CoreProgram, CoreBind, Expr (..))
 import Var (Var, Id, idDetails, varName)
 import Unique (getUnique)
-import Literal (Literal (LitInteger))
+import Literal (Literal (LitNumber))
 import Unique (Uniquable)
-import TypeRep (Type (..))
+import TyCoRep (Type (..))
 import IdInfo (IdDetails (PrimOpId, ClassOpId))
 import PrimOp (PrimOp (IntAddOp, WordAddOp))
 import Class (classKey)
@@ -50,7 +50,7 @@ translatePrimOp (WordAddOp) = "(+)"
 translatePrimOp _          = "(?)"
 
 translateLit :: Literal -> Flite.Exp
-translateLit (LitInteger n _) = Flite.Int . fromInteger $ n
+translateLit (LitNumber _ n _) = Flite.Int . fromInteger $ n
 translateLit _ = Flite.Var "unknown literal"
 
 translateAlt :: Alt Var -> Flite.Alt
