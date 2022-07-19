@@ -8,17 +8,23 @@ import DynFlags
 import CoreSyn
 -- for printing
 import GHC.IO.Handle.FD (stdout)
-import Pretty (Mode(..))
-import Outputable (ppr, printSDocLn, mkCodeStyle, CodeStyle(..))
+import Outputable (ppr, printForUser, neverQualify)
 
-import GHCFlite.Translate (translate)
+import GHCFlite.Translate (translate, pretty)
 
-import Flite.Pretty
+-- import Flite.Interp (interp)
+-- import Flite.InterpFrontend (frontend)
+-- import Flite.Inline (InlineFlag(..))
+-- import Flite.Pretty
 
 main :: IO ()
 main = do
-    core <- runGhc (Just libdir) (coreModule "test/test_main.hs")
-    print . translate $ cm_binds core
+    core <- runGhc (Just libdir) (coreModule "../test/test_main.hs")
+    let prog = translate $ cm_binds core
+    putStrLn $ pretty prog
+    --let prog = frontend (NoInline,NoInline) prog
+    --print $ prog
+    --print $ interp (NoInline,NoInline) prog
     return ()
 
 -- | Sets up a session in the GhcMonad and
@@ -27,6 +33,7 @@ coreModule :: (GhcMonad m) => String -> m CoreModule
 coreModule fileName = do
     dflags <- getSessionDynFlags
     setSessionDynFlags dflags
+    -- setSessionDynFlags $ updOptLevel 2 dflags
     core <- compileToCoreSimplified fileName
-    liftIO . printSDocLn LeftMode dflags stdout (mkCodeStyle AsmStyle) . ppr $ cm_binds core
+    liftIO . printForUser dflags stdout neverQualify . ppr $ cm_binds core
     return core

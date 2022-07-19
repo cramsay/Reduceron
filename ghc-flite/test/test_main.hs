@@ -1,5 +1,9 @@
-main = return $ 1 + 2
---  putStrLn "Hello, world!"
+module Test where
 
-a1 x = let y = 1
-       in x + y
+main :: Int
+main = fib 20
+
+
+fib n
+  | n <= 1 = 1
+  | otherwise = fib (n-2) + fib (n-1)
