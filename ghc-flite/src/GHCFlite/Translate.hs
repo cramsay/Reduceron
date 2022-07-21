@@ -1,109 +1,94 @@
 module GHCFlite.Translate where
 
+import qualified Flite.Syntax as F
+import Flite.LambdaLift (lambdaLift)
+
 import CoreSyn (Alt, AltCon (..), Bind (..), CoreProgram, CoreBind, Expr (..), isValArg, collectBinders, collectArgs, isTyCoArg)
 import Var (Var, Id, idDetails, varName, isTyCoVar, isNonCoVarId)
-import Literal (Literal (LitNumber))
+import Literal (Literal (..))
 import Name (NamedThing, getOccString, occNameString)
 import TyCoRep (Type (..))
 import IdInfo (IdDetails (..))
 import PrimOp (PrimOp (..), primOpOcc)
 import Class (classKey)
 import Outputable (ppr, showSDocUnsafe)
+import FastString (unpackFS)
+import BasicTypes (FunctionOrData(..))
+import CoreSubst
 
 import Data.Maybe (catMaybes, fromMaybe)
 import Data.List (isPrefixOf, intersperse, nub)
-import Control.Monad.State
 
-type FProg = [FDecl]
+translate :: CoreProgram -> F.Prog
+translate = lambdaLift 'A' . concat . map translateBind
 
-data FDecl = Func { funcName :: FId
-                  , funcArgs :: [FPat]
-                  , funcRhs  :: FExp }
-  deriving Eq
-
-type FId = String
-
-data FExp = FApp FExp [FExp]
-         | FCase FExp [FAlt]
-         | FLet [FBinding] FExp
-         | FVar FId
-         | Con FId
-         | Fun FId
-         | Int Int
-  deriving Eq
-
-type FPat = FExp
-type FBinding = (FId, FExp)
-type FAlt = (FPat, FExp)
-
--- We need to lambda lift definitions to make valid f-lite source We translate
--- relative to a state of definitions, so we can add new definitions for
--- lambda-lifted expressions. Let's do it via a state monad.
-
--- Also, let's not depend on flite internals. Just make our own ADT for the language here and pretty print it.
-
-translate :: CoreProgram -> FProg
-translate = flip execState [] . mapM translateBind
-
-translateBind :: CoreBind -> State [FDecl] ()
+translateBind :: CoreBind -> [F.Decl]
 translateBind (NonRec var expr)
-  | not (isModName var) =
-      do let (args, body) = collectBinders expr
-         let args' = filter isTermId args
-         fbody <- translateExpr body
-         let f = Func { funcName = getName $ var
-                      , funcArgs = map (FVar . getName) args'
-                      , funcRhs  = fbody }
-         modify (f:)
-  | otherwise = return ()
-translateBind (Rec bs)     = mapM_ translateBind $
-                               map (\(v,expr) -> NonRec v expr) bs
+  | "strModule" `isPrefixOf` getName var = []
+  | otherwise =
+      let (args, body) = collectBinders expr
+          args' = filter isTermId args
+          fbody = translateExpr body
+      in [F.Func { F.funcName = getName $ var
+                 , F.funcArgs = map (F.Var . getName) args'
+                 , F.funcRhs  = fbody }]
+translateBind (Rec bs) = concat $ map (\(v,expr) -> translateBind $ NonRec v expr) bs
 
-translateExpr :: Expr Var -> State [FDecl] FExp
+translateExpr :: Expr Var -> F.Exp
 
 translateExpr (Var id)
-  = return $ case idDetails id of
-               (PrimOpId primOp) -> Fun . translatePrimOp $ primOp
-               (ClassOpId cls)   -> Fun . getName $ id
-               VanillaId         -> FVar . getName $ id
-               DataConWorkId _   -> Con . getName $ id
-               DataConWrapId _   -> Con . getName $ id
-               DFunId f          -> Fun . getName $ id
-               idType            -> error $ "Unhandled id type: " ++ showSDocUnsafe (ppr idType)
-translateExpr (Lit lit) = return $ translateLit lit
+  = case idDetails id of
+      (PrimOpId primOp) -> F.Fun . translatePrimOp $ primOp
+      (ClassOpId cls)   -> F.Fun . getName $ id
+      VanillaId         -> F.Var . getName $ id
+      DataConWorkId _   -> F.Con . getName $ id
+      DataConWrapId _   -> F.Con . getName $ id
+      DFunId f          -> F.Fun . getName $ id
+      JoinId arity      -> F.Var . getName $ id
+      idType            -> error $ "Unhandled id type: " ++ showSDocUnsafe (ppr idType)
+translateExpr (Lit lit) = translateLit lit
 
 translateExpr (App (Var id) i)
   | getName id == "I#" = translateExpr i
+  | getName id == "C#" = translateExpr i
+  | getName id == "fromInteger" = translateExpr i
 
 translateExpr expr@(App _ _)
-  = do let (f, args) = collectArgs expr
-       f' <- translateExpr f
-       args' <- mapM translateExpr (filter isTerm args)
-       return $ FApp (markFun f') args'
+  = let (f, args) = collectArgs expr
+        f' = translateExpr f
+        args' = map translateExpr (filter isTerm args)
+    in F.App f' args'
 
--- TO DO Lambda-lifting
 translateExpr expr@(Lam _ _)
-  = do let (args, body) = collectBinders expr
-       let args' = map getName $ filter isTermId args
-       body' <- translateExpr body
-       let env = filter (`notElem` args') (freeVars body')
-       decls <- get
-       let fname = "lamlift_" ++ show (length decls)
-       modify (Func fname (map FVar (env ++ args')) body' :)
-       return (FApp (Fun fname) (map FVar env))
+  = let (args, body) = collectBinders expr
+        args' = map getName $ filter isTermId args
+        body' = translateExpr body
+    in F.Lam args' body'
 
--- TODO if this let is pattern matching, we should lift to a new top-level fn
 translateExpr (Let (NonRec var val) body)
-  = do let var' = getName var
-       val' <- translateExpr val
-       body' <- translateExpr body
-       return $ FLet [(var',val')] body'
+  = let var' = getName var
+        val' = translateExpr val
+        body' = translateExpr body
+    in F.Let [(var',val')] body'
 translateExpr (Let (Rec bs) body)
-  = translateExpr $ foldl (\scope -> \(var,val) -> Let (NonRec var val) scope) body bs
+  = let vars' = map (getName . fst) bs
+        vals' = map (translateExpr . snd) bs
+        body' = translateExpr body
+    in F.Let (zip vars' vals') body'
+
+-- Handle unboxing integer cases
+translateExpr (Case scr _ ty [(DataAlt dataCon, [num], expr)])
+  | getName dataCon == "I#" = let sub = extendIdSubst emptySubst num scr
+                              in translateExpr $ substExpr (ppr expr) sub expr
+                               -- F.Let [(getName num,F.Var $ getName id)] (translateExpr expr)
+-- Handle single default cases introduced by optimisations
+translateExpr (Case scr _ ty [(DEFAULT, [], expr)])
+  = translateExpr expr
+
 translateExpr (Case expr id ty alts)
-  = do scr <- translateExpr expr
-       alts' <- mapM translateAlt alts
-       return $ FCase scr alts'
+  = let scr = translateExpr expr
+        alts' = map translateAlt alts
+    in F.Case scr alts'
 
 -- Type expression that we should avoid translating
 translateExpr (Cast expr _coercion) = error "Cannot translate cast"
@@ -111,11 +96,19 @@ translateExpr (Tick _id _expr)      = error "Cannot translate tick"
 translateExpr (Type ty)             = error "Cannot translate type"
 translateExpr (Coercion _coercion)  = error "Cannot translate coersion"
 
-translateAlt :: Alt Var -> State [FDecl] FAlt
+translateAlt :: Alt Var -> F.Alt
 translateAlt (DataAlt dataCon, vars, expr)
-  = do rhs <- translateExpr expr
-       return (Con $ getName dataCon, rhs)
-translateAlt (LitAlt _literal, _vars, _expr)  = error "LitAlt encountered in translateAlt"
+  = let rhs = translateExpr expr
+    in (F.App (F.Con $ getName dataCon) (map (F.Var . getName) vars), rhs)
+translateAlt (LitAlt literal, _vars, expr)
+  = let rhs = translateExpr expr
+    in (translateLit literal, rhs)
+translateAlt (DEFAULT, [var], expr)
+  = let rhs = translateExpr expr
+    in (F.Var (getName var), rhs)
+translateAlt (DEFAULT, [], expr)
+  = let rhs = translateExpr expr
+    in (F.Wld, rhs)
 
 isPrimName :: String -> Bool
 isPrimName "+"     = True
@@ -126,16 +119,25 @@ isPrimName "<="    = True
 isPrimName "print" = True
 isPrimName _       = False
 
+-- TODO We should probably return F.Exp here
+-- Really important that primitives aren't marked as Var since they will be included in the environment during lambda-lifting
 translatePrimName :: String -> String
 translatePrimName "+"     = "(+)"
 translatePrimName "-"     = "(-)"
 translatePrimName "=="    = "(==)"
 translatePrimName "/="    = "(/=)"
 translatePrimName "<="    = "(<=)"
+translatePrimName "plusInteger"  = "(+)"
+translatePrimName "minusInteger" = "(-)"
+translatePrimName "eqInteger#"    = "(==)"
+translatePrimName "neInteger#"    = "(/=)"
+translatePrimName "leInteger#"    = "(<=)"
 translatePrimName "print" = "emitInt"
+translatePrimName ":" = "Cons"
+translatePrimName "[]" = "Nil"
 translatePrimName n       = n
 
-translatePrimOp :: PrimOp -> FId
+translatePrimOp :: PrimOp -> F.Id
 translatePrimOp IntAddOp = "(+)"
 translatePrimOp IntSubOp = "(-)"
 translatePrimOp IntEqOp  = "(==)"
@@ -143,89 +145,36 @@ translatePrimOp IntNeOp  = "(/=)"
 translatePrimOp IntLeOp  = "(<=)"
 --translatePrimOp ?? = "emit"
 --translatePrimOp ?? = "emitInt"
+translatePrimOp TagToEnumOp = "tte"
 translatePrimOp p           = error $ "Primitive operation not supported: " ++ (occNameString $ primOpOcc p)
 
-translateLit :: Literal -> FExp
-translateLit (LitNumber _ n _) = Int . fromInteger $ n
-translateLit lit = error "unknown literal"
+translateLit :: Literal -> F.Exp
+translateLit (LitNumber _ n _) = F.Int . fromInteger $ n
+translateLit (MachLabel  name _ IsFunction) = F.Fun (unpackFS name)
+translateLit (MachLabel  name _ IsData) = F.Con (unpackFS name)
+translateLit (MachChar c) = F.Var $ show c
+translateLit (MachStr bs) = F.Var $ show bs
+translateLit lit = error $ "unknown literal: " ++ showSDocUnsafe (ppr lit)
 
 isTermId :: Id -> Bool
-isTermId id = case idDetails id of
-                DFunId _      -> False
-                FCallId _     -> False
-                TickBoxOpId _ -> False
-                CoVarId       -> False
-                _             -> True
+isTermId id
+  | isNonCoVarId id =
+      case idDetails id of
+        DFunId _      -> False
+        FCallId _     -> False
+        TickBoxOpId _ -> False
+        CoVarId       -> False
+        _             -> not $ isPrefixOf "$" (getName' id)
+  | otherwise = False
 
 isTerm :: Expr Var -> Bool
 isTerm (Var id) = isTermId id
 isTerm e = not $ isTyCoArg e
 
-isModName :: Var -> Bool
-isModName = isPrefixOf "$trModule" . getName
-
-markFun :: FExp -> FExp
-markFun (FVar id) = Fun id
-markFun e = e
+getName' :: NamedThing a => a -> String
+getName' = translatePrimName . getOccString
 
 getName :: NamedThing a => a -> String
-getName = translatePrimName . getOccString
-
-patVars :: FPat -> [FId]
-patVars (FApp e es) = concatMap patVars (e:es)
-patVars (FVar v) = [v]
-patVars p = []
-
-freeVarsExcept :: [FId] -> FExp -> [FId]
-freeVarsExcept vs e = nub (freeVarsExcept' vs e)
-
-freeVarsExcept' :: [FId] -> FExp -> [FId]
-freeVarsExcept' vs e = fv vs e
-  where
-    fv vs (FCase e as) =
-      fv vs e ++ concat [fv (patVars p ++ vs) e | (p, e) <- as]
-    fv vs (FLet bs e) = let ws = map fst bs ++ vs
-                       in  fv ws e ++ concatMap (fv ws . snd) bs
-    fv vs (FVar w) = [w | w `notElem` vs]
-    fv vs (FApp e es) = concat $ map (fv vs) (e:es)
-    fv vs _ = []
-
-freeVars :: FExp -> [FId]
-freeVars e = nub (freeVarsExcept' [] e)
-
--- Pretty Printing
-
-consperse :: [a] -> [[a]] -> [a]
-consperse x xs = concat (intersperse x xs)
-
-pretty :: FProg -> String
-pretty p = "{\n" ++ concatMap show p ++ "}"
-
-instance Show FDecl where
-  show (Func name args rhs) = name ++ " "
-                           ++ consperse " " (map showArg args)
-                           ++ " = "
-                           ++ show rhs ++ ";\n"
-
-instance Show FExp where
-  show (FApp e es) = consperse " " (showArg e : map showArg es)
-  show (FCase e as) = "case " ++ show e ++ " of " ++ showBlock showAlt as
-  show (FLet bs e) = "let " ++ showBlock showBind bs ++ " in " ++ show e
-  show (FVar v) = v
-  show (Fun f) = f
-  show (Con c) = c
-  show (Int i) = show i
-
-showArg :: FExp -> String
-showArg (FApp e []) = showArg e
-showArg (FApp e es) = "(" ++ show (FApp e es) ++ ")"
-showArg e = show e
-
-showBlock :: (a -> String) -> [a] -> String
-showBlock f as = "{ " ++ consperse "; " (map f as) ++ " }"
-
-showAlt :: FAlt -> String
-showAlt (p, e) = show p ++ " -> " ++ show e
-
-showBind :: FBinding -> String
-showBind (v, e) = v ++ " = " ++ show e
+getName = map sanitise . getName'
+  where sanitise '$' = 's'
+        sanitise c = c

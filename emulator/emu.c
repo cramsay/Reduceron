@@ -15,11 +15,11 @@
 
 /* Compile-time options */
 
-#define MAXPUSH 8
-#define APSIZE  6
-#define MAXAPS  4
-#define MAXLUTS 2
-#define MAXREGS 8
+#define MAXPUSH 9 //8
+#define APSIZE  9 //6
+#define MAXAPS  9 //4
+#define MAXLUTS 9 //2
+#define MAXREGS 9 // 8
 
 #define MAXHEAPAPPS    8192
 #define MAXSTACKELEMS  1024

@@ -27,7 +27,7 @@ lift c f (Lam vs e) =
   do let ws = filter (`notElem` vs) (freeVars e)
      i <- get
      set (i+1)
-     let f' = f ++ "^" ++ c : show i
+     let f' = f ++ "_lift" ++ c : show i
      e' <- lift c f e
      write (Func f' (map Var (ws ++ vs)) e')
      return (App (Fun f') (map Var ws))

@@ -1,26 +1,7 @@
 module Test where
 
-import Prelude hiding (or, length, map, null, foldr1)
+import Prelude hiding (or, length, map, null)
 
-{-
-main :: Int
-main = myfoldl (+) 0 [3,4,6]
-
-myfoldl f init [] = init
-myfoldl f init (x:xs) = myfoldl f (f init x) xs
--}
-
-{- FIB.hs
-main :: Integer
-main = fib 20
-
-fib :: Integer -> Integer
-fib n
-  | n <= 1 = 1
-  | otherwise = fib (n-2) + fib (n-1)
--}
-
--- {- Adjoxo
 map f [] = []
 map f (x:xs) = f x : map f xs
 
@@ -57,7 +38,7 @@ insert x (y:ys) = case x <= y of
                     True -> x : y : ys
                     False -> y : insert x ys
 
-foldr1 f []  = Win
+foldr1 f []  = []
 foldr1 f [x] = x
 foldr1 f (x:y:ys) = f x (foldr1 f (y:ys))
 
@@ -122,10 +103,7 @@ report Draw p = 3
 
 opp O = X
 opp X = O
-
-side :: Symbol -> Integer
 side O = 0
 side X = 1
 
 main = adjudicate [] []
--- -}
