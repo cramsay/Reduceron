@@ -28,9 +28,9 @@ Exposed-modules:
   Lava.Vector
   Lava.Vhdl
 Extra-Source-Files:
-  examples/Cube.hs
-  examples/HalfAdd.hs
-  examples/Loopy.hs
-  examples/Mult.hs
-  examples/Poly.hs
-  examples/Stack.hs
+  examples/Cube/Cube.hs
+  examples/HalfAdd/HalfAdd.hs
+  examples/Loopy/Loopy.hs
+  examples/Mult/Mult.hs
+  examples/Poly/Poly.hs
+  examples/Stack/Stack.hs

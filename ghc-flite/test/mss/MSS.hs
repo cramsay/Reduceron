@@ -5,7 +5,7 @@ import Prelude hiding (init,max,concatMap, append, map, sum, maximum)
 init :: [a] -> [a]
 init [] = []
 init [x] = []
-init (x:y:xs) = x : (init $ y:xs)
+init (x:y:xs) = x : init (y:xs)
 
 inits :: [a] -> [[a]]
 inits [] = [[]]
@@ -39,6 +39,7 @@ sumAcc acc (x:xs) = sumAcc (x+acc) xs
 
 mss xs = maximum (map sum (segments xs))
 
+fromTo :: Integer -> Integer -> [Integer]
 fromTo n m = case n <= m of
                True -> n : fromTo (n+1) m
                False -> []

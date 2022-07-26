@@ -1,8 +1,7 @@
 {
-    lvl  = 1;
-    lvl1  = 2;
-    fib n = case (<=) n lvl of { False -> (+) (fib ((-) n lvl1)) (fib ((-) n lvl)); True -> lvl };
-    main1  = 20;
-    main  = fib main1;
+lvl  = 1;
+lvl1  = 2;
+fib n = case (<=) n lvl of { False -> (+) (fib ((-) n lvl1)) (fib ((-) n lvl)); True -> lvl };
+main1  = 20;
+main  = fib main1;
 }
-

@@ -1,20 +1,20 @@
 {
-init ds = case ds of { Nil -> Nil; Cons x ds1 -> case ds1 of { Nil -> Nil; Cons y xs -> Cons x (init ds1) } };
+init ds = case ds of { Nil -> Nil; Cons x ds1 -> case ds1 of { Nil -> Nil; Cons y xs -> Cons x (init (Cons y xs)) } };
 inits ds = case ds of { Nil -> Cons Nil Nil; Cons y ys -> Cons ds (inits (init ds)) };
 tails ds = case ds of { Nil -> Nil; Cons x xs -> Cons (Cons x xs) (tails xs) };
 map f ds = case ds of { Nil -> Nil; Cons x xs -> Cons (f x) (map f xs) };
 append ds ys = case ds of { Nil -> ys; Cons x xs -> Cons x (append xs ys) };
 concatMap f ds = case ds of { Nil -> Nil; Cons x xs -> append (f x) (concatMap f xs) };
 segments xs = concatMap tails (inits xs);
-max eta eta1 = let { max1 = maxliftA0 max1 } in max1 eta eta1;
-maxliftA0 max1 m ds = case ds of { Nil -> m; Cons x xs -> case (<=) m x of { False -> max1 m xs; True -> max1 x xs } };
+max eta eta1 = let { max1 = maxLiftA0 } in max1 eta eta1;
+maxLiftA0 m ds = case ds of { Nil -> m; Cons x xs -> case (<=) m x of { False -> maxLiftA0 m xs; True -> maxLiftA0 x xs } };
 maximum ds = case ds of { Nil -> 0; Cons x xs -> max x xs };
-sumAcc eta eta1 = let { sumAcc1 = sumAccliftA0 sumAcc1 } in sumAcc1 eta eta1;
-sumAccliftA0 sumAcc1 acc ds = case ds of { Nil -> acc; Cons x xs -> sumAcc1 ((+) x acc) xs };
-sum xs = let { sumAcc1 = sumliftA0 sumAcc1 } in sumAcc1 (0) xs;
-sumliftA0 sumAcc1 acc ds = case ds of { Nil -> acc; Cons x xs1 -> sumAcc1 ((+) x acc) xs1 };
+sumAcc eta eta1 = let { sumAcc1 = sumAccLiftA0 } in sumAcc1 eta eta1;
+sumAccLiftA0 acc ds = case ds of { Nil -> acc; Cons x xs -> sumAccLiftA0 ((+) x acc) xs };
+sum xs = let { sumAcc1 = sumLiftA0 } in sumAcc1 0 xs;
+sumLiftA0 acc ds = case ds of { Nil -> acc; Cons x xs1 -> sumLiftA0 ((+) x acc) xs1 };
 mss xs = maximum (map sum (segments xs));
-fromTo eta eta1 = let { fromTo1 = fromToliftA0 fromTo1 } in fromTo1 eta eta1;
-fromToliftA0 fromTo1 n m = case (<=) n m of { False -> Nil; True -> Cons n (fromTo1 ((+) n (1)) m) };
+fromTo eta eta1 = let { fromTo1 = fromToLiftA0 } in fromTo1 eta eta1;
+fromToLiftA0 n m = case (<=) n m of { False -> Nil; True -> Cons n (fromToLiftA0 ((+) n 1) m) };
 main  = (+) ((-) (maximum (map sum (concatMap tails (inits (fromTo ((-) 0 160) 160))))) (maximum (map sum (concatMap tails (inits (fromTo ((-) 0 150) 150)))))) ((-) (maximum (map sum (concatMap tails (inits (fromTo ((-) 0 161) 161))))) (maximum (map sum (concatMap tails (inits (fromTo ((-) 0 151) 151))))));
 }

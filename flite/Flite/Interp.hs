@@ -28,6 +28,9 @@ instance Show Val where
   show (Error s) = "** Interpreter error: " ++ s
   show (Emit s k) = s ++ show k
   show (St32 a d k) = "[[" ++ show a ++ " <- " ++ show d ++ "]]" ++ show k
+  show (F i) = "Fn " ++ show i -- I WAS LOOKING HERE TO GET MORE DEBUG INFO
+  show (Lut ar) = "LUT " ++ show ar
+  show (Lambda id val) = "Lambda " ++ show id ++ " -> " ++ show val
   show _ = "*Thunk*"
 
 showEmitOnly (Emit s k) = s ++ showEmitOnly k

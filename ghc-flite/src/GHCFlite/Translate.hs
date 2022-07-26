@@ -20,11 +20,13 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.List (isPrefixOf, intersperse, nub)
 
 translate :: CoreProgram -> F.Prog
-translate = lambdaLift 'A' . concat . map translateBind
+translate = lambdaLift 'A' .
+            concat . map translateBind
 
 translateBind :: CoreBind -> [F.Decl]
 translateBind (NonRec var expr)
-  | "strModule" `isPrefixOf` getName var = []
+  | "$tr" `isPrefixOf` getName' var = []
+  | "$tc" `isPrefixOf` getName' var = []
   | otherwise =
       let (args, body) = collectBinders expr
           args' = filter isTermId args
@@ -36,28 +38,19 @@ translateBind (Rec bs) = concat $ map (\(v,expr) -> translateBind $ NonRec v exp
 
 translateExpr :: Expr Var -> F.Exp
 
-translateExpr (Var id)
-  = case idDetails id of
-      (PrimOpId primOp) -> F.Fun . translatePrimOp $ primOp
-      (ClassOpId cls)   -> F.Fun . getName $ id
-      VanillaId         -> F.Var . getName $ id
-      DataConWorkId _   -> F.Con . getName $ id
-      DataConWrapId _   -> F.Con . getName $ id
-      DFunId f          -> F.Fun . getName $ id
-      JoinId arity      -> F.Var . getName $ id
-      idType            -> error $ "Unhandled id type: " ++ showSDocUnsafe (ppr idType)
+translateExpr (Var id) = toRef id
 translateExpr (Lit lit) = translateLit lit
-
-translateExpr (App (Var id) i)
-  | getName id == "I#" = translateExpr i
-  | getName id == "C#" = translateExpr i
-  | getName id == "fromInteger" = translateExpr i
 
 translateExpr expr@(App _ _)
   = let (f, args) = collectArgs expr
         f' = translateExpr f
         args' = map translateExpr (filter isTerm args)
-    in F.App f' args'
+    in go f' args'
+  where go (F.Var id) [x]
+          | id `elem` ignoredUnaryFns = x
+        go (F.Fun id) [x]
+          | id `elem` ignoredUnaryFns = x
+        go f args = F.App f args
 
 translateExpr expr@(Lam _ _)
   = let (args, body) = collectBinders expr
@@ -66,13 +59,17 @@ translateExpr expr@(Lam _ _)
     in F.Lam args' body'
 
 translateExpr (Let (NonRec var val) body)
-  = let var' = getName var
-        val' = translateExpr val
-        body' = translateExpr body
-    in F.Let [(var',val')] body'
+  -- | isTermId var
+      = let var' = getName var
+            val' = translateExpr val
+            body' = translateExpr body
+        in F.Let [(var',val')] body'
+  -- | otherwise = translateExpr body
+
 translateExpr (Let (Rec bs) body)
-  = let vars' = map (getName . fst) bs
-        vals' = map (translateExpr . snd) bs
+  = let bs' = bs -- filter (isTermId . fst) bs
+        vars' = map (getName . fst) bs'
+        vals' = map (translateExpr . snd) bs'
         body' = translateExpr body
     in F.Let (zip vars' vals') body'
 
@@ -80,15 +77,18 @@ translateExpr (Let (Rec bs) body)
 translateExpr (Case scr _ ty [(DataAlt dataCon, [num], expr)])
   | getName dataCon == "I#" = let sub = extendIdSubst emptySubst num scr
                               in translateExpr $ substExpr (ppr expr) sub expr
-                               -- F.Let [(getName num,F.Var $ getName id)] (translateExpr expr)
 -- Handle single default cases introduced by optimisations
 translateExpr (Case scr _ ty [(DEFAULT, [], expr)])
   = translateExpr expr
 
 translateExpr (Case expr id ty alts)
   = let scr = translateExpr expr
-        alts' = map translateAlt alts
+        sub = extendIdSubst emptySubst id expr
+        alts' = map (translateAlt . updateAlt (ppr id) sub) alts
     in F.Case scr alts'
+  where updateAlt id sub (con, args, scope) = (con, args, substExpr id sub scope)
+   -- Maybe we should see if id is a free variable in any alts.
+   -- If so, let bind it!
 
 -- Type expression that we should avoid translating
 translateExpr (Cast expr _coercion) = error "Cannot translate cast"
@@ -110,15 +110,6 @@ translateAlt (DEFAULT, [], expr)
   = let rhs = translateExpr expr
     in (F.Wld, rhs)
 
-isPrimName :: String -> Bool
-isPrimName "+"     = True
-isPrimName "-"     = True
-isPrimName "=="    = True
-isPrimName "/="    = True
-isPrimName "<="    = True
-isPrimName "print" = True
-isPrimName _       = False
-
 -- TODO We should probably return F.Exp here
 -- Really important that primitives aren't marked as Var since they will be included in the environment during lambda-lifting
 translatePrimName :: String -> String
@@ -135,7 +126,19 @@ translatePrimName "leInteger#"    = "(<=)"
 translatePrimName "print" = "emitInt"
 translatePrimName ":" = "Cons"
 translatePrimName "[]" = "Nil"
+translatePrimName "(,)" = "MkTup"
+translatePrimName "(#,#)" = "MkTup"
+translatePrimName "C:Ord" = "COrd"
+translatePrimName "C:Eq" = "CEq"
 translatePrimName n       = n
+
+isPrimName :: String -> Bool
+isPrimName "(+)"  = True
+isPrimName "(-)"  = True
+isPrimName "(==)" = True
+isPrimName "(/=)" = True
+isPrimName "(<=)" = True
+isPrimName _      = False
 
 translatePrimOp :: PrimOp -> F.Id
 translatePrimOp IntAddOp = "(+)"
@@ -145,11 +148,17 @@ translatePrimOp IntNeOp  = "(/=)"
 translatePrimOp IntLeOp  = "(<=)"
 --translatePrimOp ?? = "emit"
 --translatePrimOp ?? = "emitInt"
-translatePrimOp TagToEnumOp = "tte"
+translatePrimOp TagToEnumOp = "tagToEnum" -- TODO should handle the application
+                                          -- of this and try to preserve
+                                          -- original constructors...
+                                          -- Just now we only offer this clause to
+                                          -- prevent errors in codegen for -O2
 translatePrimOp p           = error $ "Primitive operation not supported: " ++ (occNameString $ primOpOcc p)
 
 translateLit :: Literal -> F.Exp
-translateLit (LitNumber _ n _) = F.Int . fromInteger $ n
+translateLit (LitNumber _ n _)
+  | n >= 0 = F.Int . fromInteger $ n
+  | otherwise = F.App (F.Fun "(-)") [F.Int 0, F.Int $ fromInteger $ negate n]
 translateLit (MachLabel  name _ IsFunction) = F.Fun (unpackFS name)
 translateLit (MachLabel  name _ IsData) = F.Con (unpackFS name)
 translateLit (MachChar c) = F.Var $ show c
@@ -164,8 +173,15 @@ isTermId id
         FCallId _     -> False
         TickBoxOpId _ -> False
         CoVarId       -> False
-        _             -> not $ isPrefixOf "$" (getName' id)
+        ClassOpId cls -> False
+        --JoinId _      -> False
+        _             -> not $ (isPrefixOf "$" (getName' id) ) -- || (getName id) == "lvl") -- LVL thing is major hack
   | otherwise = False
+
+isFun :: Id -> Bool
+isFun id = case idDetails id of
+             DFunId f  -> True
+             _         -> False
 
 isTerm :: Expr Var -> Bool
 isTerm (Var id) = isTermId id
@@ -177,4 +193,21 @@ getName' = translatePrimName . getOccString
 getName :: NamedThing a => a -> String
 getName = map sanitise . getName'
   where sanitise '$' = 's'
+        sanitise '_' = 'u'
+        sanitise '\'' = 'p'
         sanitise c = c
+
+toRef :: Id -> F.Exp
+toRef id
+  = case idDetails id of
+      (PrimOpId primOp) -> F.Fun . translatePrimOp $ primOp
+      (ClassOpId cls)   -> F.Fun . getName $ id
+      VanillaId         -> let n = getName id
+                           in if (isPrimName n) then F.Fun n else F.Var n
+      DataConWorkId _   -> F.Con . getName $ id
+      DataConWrapId _   -> F.Con . getName $ id
+      DFunId f          -> F.Fun . getName $ id
+      JoinId arity      -> F.Var . getName $ id
+      idType            -> error $ "Unhandled id type: " ++ showSDocUnsafe (ppr idType)
+
+ignoredUnaryFns = ["I#", "C#", "fromInteger", "toInteger"]

@@ -1,78 +1,30 @@
 {
-map f ds1 = case ds1 of { Nil -> Nil; Cons x xs -> Cons (f x) (map f xs) };
-
-bestOf ds1 v = case ds1 of { Win -> Win; Loss -> v; Draw -> case v of { Win -> Win; Loss -> Draw; Draw -> Draw } };
-
-inverse ds1 = case ds1 of { Win -> Loss; Loss -> Win; Draw -> Draw };
-
-fromTo eta eta1 = fromToflexA0 eta eta1;
-fromToflexA0 n m = case (<=) n m of { False -> Nil; True -> Cons n (fromToflexA0 ((+) n (1)) m) };
-
-cmp eta eta1 = case (==) eta eta1 of { False -> case (<=) eta eta1 of { False -> GT; True -> LT }; True -> EQ };
-
-diff eta eta1 = diffflexA0 eta eta1;
-diffflexA0 ds1 ys = case ds1 of { Nil -> Nil; Cons x xs -> case ys of { Nil -> Cons x xs; Cons y ys1 -> case (==) x y of { False -> case (<=) x y of { False -> diffflexA0 (Cons x xs) ys1; True -> Cons x (diffflexA0 xs (Cons y ys1)) }; True -> diffflexA0 xs ys1 } } };
-
-insert eta eta1 = insertflexA0 eta eta1;
-insertflexA0 x ds1 = case ds1 of { Nil -> Cons x Nil; Cons y ys -> case (<=) x y of { False -> Cons y (insertflexA0 x ys); True -> Cons x (Cons y ys) } };
-
-foldr1 f ds1 = case ds1 of { Nil -> Win; Cons x ds2 -> case ds2 of { Nil -> x; Cons y ys -> f x (foldr1 f (Cons y ys)) } };
-
-null ds1 = case ds1 of { Nil -> True; Cons x xs -> False };
-
+map f ds = case ds of { Nil -> Nil; Cons x xs -> Cons (f x) (map f xs) };
+bestOf ds v = case ds of { Win -> Win; Loss -> v; Draw -> case v of { Win -> Win; Loss -> Draw; Draw -> Draw } };
+inverse ds = case ds of { Win -> Loss; Loss -> Win; Draw -> Draw };
+fromTo eta eta1 = let { fromTo1 = fromToLiftA0 } in fromTo1 eta eta1;
+fromToLiftA0 n m = case (<=) n m of { False -> Nil; True -> Cons n (fromToLiftA0 ((+) n 1) m) };
+insert eta eta1 = let { insert1 = insertLiftA0 } in insert1 eta eta1;
+insertLiftA0 x ds = case ds of { Nil -> Cons x Nil; Cons y ys -> case (<=) x y of { False -> Cons y (insertLiftA0 x ys); True -> Cons x (Cons y ys) } };
+foldr1 f ds = case ds of { Nil -> patError "../test/adjoxo/Adjoxo.hs:(42,1)-(43,41)|function foldr1"; Cons x ds1 -> case ds1 of { Nil -> x; Cons y ys -> f x (foldr1 f (Cons y ys)) } };
+null ds = case ds of { Nil -> True; Cons x xs -> False };
+or ds x = case ds of { False -> x; True -> True };
+lengthAcc eta eta1 = let { lengthAcc1 = lengthAccLiftA0 } in lengthAcc1 eta eta1;
+lengthAccLiftA0 acc ds = case ds of { Nil -> acc; Cons x xs -> lengthAccLiftA0 ((+) 1 acc) xs };
+length xs = lengthAcc 0 xs;
+opp ds = case ds of { O -> X; X -> O };
+side ds = case ds of { O -> 0; X -> 1 };
+skrep  = KindRepTyConApp Nil;
+skrep1  = KindRepTyConApp Nil;
+skrep2  = KindRepTyConApp Nil;
+cmp a b = case (==) a b of { False -> case (<=) a b of { False -> GT; True -> LT }; True -> EQ };
+diff ds ys = case ds of { Nil -> Nil; Cons x xs -> case ys of { Nil -> Cons x xs; Cons y ys1 -> case (==) x y of { False -> case (<=) x y of { False -> diff (Cons x xs) ys1; True -> Cons x (diff xs (Cons y ys1)) }; True -> diff xs ys1 } } };
 subset xs ys = case diff xs ys of { Nil -> True; Cons x xs1 -> False };
-
-or ds1 x = case ds1 of { False -> x; True -> True };
-
-hasLine p = case diff (Cons (1) (Cons (2) (Cons (3) Nil))) p of {
-  Nil -> True;
-  Cons x xs -> case diff (Cons (4) (Cons (5) (Cons (6) Nil))) p of {
-    Nil -> True;
-    Cons x1 xs1 -> case diff (Cons (7) (Cons (8) (Cons (9) Nil))) p of {
-      Nil -> True;
-      Cons x2 xs2 -> case diff (Cons (1) (Cons (4) (Cons (7) Nil))) p of {
-        Nil -> True;
-        Cons x3 xs3 -> case diff (Cons (2) (Cons (5) (Cons (8) Nil))) p of {
-          Nil -> True;
-          Cons x4 xs4 -> case diff (Cons (3) (Cons (6) (Cons (9) Nil))) p of {
-            Nil -> True;
-            Cons x5 xs5 -> case diff (Cons (1) (Cons (5) (Cons (9) Nil))) p of {
-              Nil -> True;
-              Cons x6 xs6 -> case diff (Cons (3) (Cons (5) (Cons (7) Nil))) p of {
-                Nil -> True;
-                Cons x7 xs7 -> False } } } } } } } };
-
-lengthAcc eta eta1 = lengthAccflexA0 eta eta1;
-lengthAccflexA0 acc ds1 = case ds1 of { Nil -> acc; Cons x xs -> lengthAccflexA0 ((+) (1) acc) xs };
-length xs = lengthAcc (0) xs;
-
+hasLine p = case diff (Cons 1 (Cons 2 (Cons 3 Nil))) p of { Nil -> True; Cons x xs -> case diff (Cons 4 (Cons 5 (Cons 6 Nil))) p of { Nil -> True; Cons x1 xs1 -> case diff (Cons 7 (Cons 8 (Cons 9 Nil))) p of { Nil -> True; Cons x2 xs2 -> case diff (Cons 1 (Cons 4 (Cons 7 Nil))) p of { Nil -> True; Cons x3 xs3 -> case diff (Cons 2 (Cons 5 (Cons 8 Nil))) p of { Nil -> True; Cons x4 xs4 -> case diff (Cons 3 (Cons 6 (Cons 9 Nil))) p of { Nil -> True; Cons x5 xs5 -> case diff (Cons 1 (Cons 5 (Cons 9 Nil))) p of { Nil -> True; Cons x6 xs6 -> case diff (Cons 3 (Cons 5 (Cons 7 Nil))) p of { Nil -> True; Cons x7 xs7 -> False } } } } } } } };
 gridFull ap pp = (==) ((+) (length ap) (length pp)) 9;
-
-ds  = MkPair dsflexA1 bestOf dsflexA0;
-dsflexA0 ap pp m = case dsflexA1 bestOf pp (insert m ap) of { Win -> Loss; Loss -> Win; Draw -> Draw };
-dsflexA1 bestOf ap pp = case hasLine pp of { False -> case gridFull ap pp of { False -> foldr1 bestOf (map (dsflexA0 ap pp) (diff (diff (fromTo (1) (9)) ap) pp)); True -> Draw }; True -> Loss };
-
-analysis  = case ds of { MkPair dsflexA1 bestOf dsflexA0 -> dsflexA1 bestOf };
-
-moveval  = case ds of { MkPair dsflexA1 bestOf dsflexA0 -> dsflexA0 };
-
-opp ds1 = case ds1 of { O -> X; X -> O };
-
-side ds1 = case ds1 of { O -> 0; X -> 1 };
-
-report ds1 s = case ds1 of { Win -> side s; Loss -> side case s of { O -> X; X -> O }; Draw -> 3 };
-
-adjudicate os xs = let { eta = length os } in
-                   let { eta1 = length xs } in
-                   case (==) eta eta1 of {
-                     False -> case (<=) eta eta1 of {
-                       False -> report case ds of {MkPair dsflexA1 bestOf dsflexA0 -> dsflexA1 bestOf xs os } X;
-                       True -> report case ds of { MkPair dsflexA1 bestOf dsflexA0 -> dsflexA1 bestOf os xs } O };
-                     True -> case hasLine xs of {
-                       False -> case hasLine os of {
-                         False -> report case ds of { MkPair dsflexA1 bestOf dsflexA0 -> dsflexA1 bestOf xs os } X;
-                         True -> 0 };
-                       True -> 1 } };
-
+moveval ap pp m = case analysis pp (insert m ap) of { Win -> Loss; Loss -> Win; Draw -> Draw };
+analysis ap pp = case hasLine pp of { False -> case gridFull ap pp of { False -> foldr1 bestOf (map (moveval ap pp) (diff (diff (fromTo 1 9) ap) pp)); True -> Draw }; True -> Loss };
+report ds s = case ds of { Win -> side s; Loss -> side case s of { O -> X; X -> O }; Draw -> 3 };
+adjudicate os xs = let { a = length os } in let { b = length xs } in case (==) a b of { False -> case (<=) a b of { False -> report (analysis xs os) X; True -> report (analysis os xs) O }; True -> case hasLine xs of { False -> case hasLine os of { False -> report (analysis xs os) X; True -> 0 }; True -> 1 } };
 main  = adjudicate Nil Nil;
 }
