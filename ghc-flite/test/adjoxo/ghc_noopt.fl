@@ -6,7 +6,7 @@ fromTo eta eta1 = let { fromTo1 = fromToLiftA0 } in fromTo1 eta eta1;
 fromToLiftA0 n m = case (<=) n m of { False -> Nil; True -> Cons n (fromToLiftA0 ((+) n 1) m) };
 insert eta eta1 = let { insert1 = insertLiftA0 } in insert1 eta eta1;
 insertLiftA0 x ds = case ds of { Nil -> Cons x Nil; Cons y ys -> case (<=) x y of { False -> Cons y (insertLiftA0 x ys); True -> Cons x (Cons y ys) } };
-foldr1 f ds = case ds of { Nil -> patError "../test/adjoxo/Adjoxo.hs:(42,1)-(43,41)|function foldr1"; Cons x ds1 -> case ds1 of { Nil -> x; Cons y ys -> f x (foldr1 f (Cons y ys)) } };
+foldr1 f ds = case ds of { Nil -> Win; Cons x ds1 -> case ds1 of { Nil -> x; Cons y ys -> f x (foldr1 f (Cons y ys)) } };
 null ds = case ds of { Nil -> True; Cons x xs -> False };
 or ds x = case ds of { False -> x; True -> True };
 lengthAcc eta eta1 = let { lengthAcc1 = lengthAccLiftA0 } in lengthAcc1 eta eta1;
