@@ -266,23 +266,55 @@ fullAdd cin a b = (sum, cout)
         sum  = xorcy (sum', cin)
         cout = muxcy sum' (a, cin)
 
-binAdd :: Bit -> [Bit] -> [Bit] -> [Bit]
-binAdd c a b = add c a b
+binAdd :: [Bit] -> [Bit] -> [Bit]
+binAdd a b =
+  makeComponent "add"
+  {-   Inputs: -} (a ++ b)
+  {-  Outputs: -} owidth
+  {- Simulate: -} (simAdd awidth owidth)
+  {-   Params: -} [ "owidth" :-> show owidth
+                  , "awidth" :-> show awidth
+                  , "bwidth" :-> show bwidth
+                  ]
+  {- Continue: -} id
   where
-    add c [a]    [b]    = [sum, cout]
-      where (sum, cout) = fullAdd c a b
-    add c (a:as) [b]    = add c (a:as) [b,b]
-    add c [a]    (b:bs) = add c [a,a] (b:bs)
-    add c (a:as) (b:bs) = sum : add cout as bs
-      where (sum, cout) = fullAdd c a b
+    awidth = length a
+    bwidth = length b
+    owidth = 1 + max awidth bwidth
+
+simAdd :: Int -> Int -> [[Bool]] -> [[Bool]]
+simAdd awidth owidth sigs = zipWith (\x -> \y -> natToSizedBin ((binToNat x) + (binToNat y)) owidth) a b
+  where
+    (a, b)   = splitAt awidth sigs
+
+binSub :: [Bit] -> [Bit] -> [Bit]
+binSub a b =
+  makeComponent "sub"
+  {-   Inputs: -} (a ++ b)
+  {-  Outputs: -} owidth
+  {- Simulate: -} (simSub awidth owidth)
+  {-   Params: -} [ "owidth" :-> show owidth
+                  , "awidth" :-> show awidth
+                  , "bwidth" :-> show bwidth
+                  ]
+  {- Continue: -} id
+  where
+    awidth = length a
+    bwidth = length b
+    owidth = 1 + max awidth bwidth
+
+simSub :: Int -> Int -> [[Bool]] -> [[Bool]]
+simSub awidth owidth sigs = zipWith (\x -> \y -> natToSizedBin ((binToNat x) - (binToNat y)) owidth) a b
+  where
+    (a, b)   = splitAt awidth sigs
 
 infixl 6 /+/
 (/+/) :: [Bit] -> [Bit] -> [Bit]
-a /+/ b = init (binAdd low a b)
+a /+/ b = init (binAdd a b)
 
 infixl 6 /-/
 (/-/) :: [Bit] -> [Bit] -> [Bit]
-a /-/ b = init (binAdd high a (map inv b))
+a /-/ b = init (binSub a b)
 
 infix 4 /</
 (/</) :: [Bit] -> [Bit] -> Bit
@@ -301,7 +333,7 @@ infix 4 />=/
 a />=/ b = b /<=/ a
 
 ult :: [Bit] -> [Bit] -> Bit
-a `ult` b = inv $ last $ binAdd high a (map inv b)
+a `ult` b = inv $ last $ binSub a b
 
 ule :: [Bit] -> [Bit] -> Bit
 a `ule` b = inv (b `ult` a)
@@ -314,11 +346,11 @@ a `uge` b = b `ule` a
 
 -- | Two's complement of a bit-list.
 complement :: [Bit] -> [Bit]
-complement a = init $ binAdd high (map inv a) [low]
+complement a = init $ binSub [low] a
 
 -- | Addition of a single bit to a bit-list.
 bitPlus :: Bit -> [Bit] -> [Bit]
-bitPlus a b = init (binAdd a (map (const low) b) b)
+bitPlus a b = error "CR broke bitPlus!" --init (binAdd a (map (const low) b) b)
 
 ---------------------------------- Bit Vectors --------------------------------
 
@@ -372,7 +404,7 @@ instance Ordered (Vec n Bit) where
 natSub :: N n => Word n -> Word n -> Word n
 natSub a b = Vec $ mapG (last r <&>) (init r)
   where (x, y) = (velems a, velems b)
-        r = binAdd high x (map inv y)
+        r = binSub x y
 
 ------------------------------ Signed Bit Vectors -----------------------------
 

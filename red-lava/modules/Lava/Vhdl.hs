@@ -19,11 +19,12 @@ vhdlGumpth = unlines $
   , ""
   , "library IEEE;"
   , "use IEEE.STD_LOGIC_1164.ALL;"
-  , "use IEEE.STD_LOGIC_ARITH.ALL;"
-  , "use IEEE.STD_LOGIC_UNSIGNED.ALL;"
+  , "use IEEE.NUMERIC_STD.ALL;"
   , ""
   , "library unisim;"
   , "use unisim.vcomponents.all;"
+  , "library unimacro;"
+  , "use unimacro.vcomponents.all;"
   , ""
   , "use work.all;"
   , ""
@@ -112,100 +113,51 @@ ramFile part name ramType params = unlines commands
                            else "init_" ++ name ++ ".txt"
 
     commands =
-      [ "# York Lava generated this core, targeting Xilinx Core Generator version 13.1"
-      , "#"
-      , "# Memory dimension: " ++ show (2^awidth) ++ " " ++ show dwidth ++ "-bit words"
-      , "#"
-      , "# Memory size " ++ show (dwidth * 2^awidth) ++ " bits ="
-      , "#             " ++ show ((dwidth * 2^awidth) `div` 1024) ++ " Kib"
-      , "#"
-      , "# BEGIN Project Options"
-      , "SET addpads = False"
-      , "SET asysymbol = True"
-      , "SET busformat = BusFormatAngleBracketNotRipped"
-      , "SET createndf = False"
-      , "SET designentry = VHDL"
-      , "SET device = " ++ partName part
-      , "SET devicefamily = " ++ partFamily part
-      , "SET flowvendor = Foundation_ISE"
-      , "SET formalverification = False"
-      , "SET foundationsym = False"
-      , "SET implementationfiletype = Ngc"
-      , "SET package = " ++ partPackage part
-      , "SET removerpms = False"
-      , "SET simulationfiles = Behavioral"
-      , "SET speedgrade = " ++ partSpeedGrade part
-      , "SET verilogsim = False"
-      , "SET vhdlsim = True"
-      , "# END Project Options"
-      , "# BEGIN Select"
-      , "SELECT Block_Memory_Generator xilinx.com:ip:blk_mem_gen:6.1"
-      , "# END Select"
-      , "# BEGIN Parameters"
-      , "CSET additional_inputs_for_power_estimation=false"
-      , if null primType then "CSET algorithm=Minimum_Area"
-                         else "CSET algorithm=Fixed_Primitives"
-      , "CSET assume_synchronous_clk=false"
-      , "CSET axi_id_width=4"
-      , "CSET axi_slave_type=Memory_Slave"
-      , "CSET axi_type=AXI4_Full"
-      , "CSET byte_size=9"
-      , "CSET coe_file=" ++ coeFile
-      , "CSET collision_warnings=ALL"
-      , "CSET component_name=" ++ name
-      , "CSET disable_collision_warnings=false"
-      , "CSET disable_out_of_range_warnings=false"
-      , "CSET ecc=false"
-      , "CSET ecctype=No_ECC"
-      , "CSET enable_a=Always_Enabled"
-      , "CSET enable_b=Always_Enabled"
-      , "CSET error_injection_type=Single_Bit_Error_Injection"
-      , "CSET fill_remaining_memory_locations=true"
-      , "CSET interface_type=Native"
-      , "CSET load_init_file=" ++
-          (if coeFile == "no_coe_file_loaded" then "false" else "true")
-      , "CSET memory_type=" ++
-          (if ramType == "ram" then "Single_Port_RAM"
-                               else "True_Dual_Port_RAM")
-      , "CSET operating_mode_a=WRITE_FIRST"
-      , "CSET operating_mode_b=WRITE_FIRST"
-      , "CSET output_reset_value_a=0"
-      , "CSET output_reset_value_b=0"
-      , "CSET pipeline_stages=0"
--- CSET port_a_clock=100
--- CSET port_a_enable_rate=100
--- CSET port_a_write_rate=50
--- CSET port_b_clock=100
--- CSET port_b_enable_rate=100
--- CSET port_b_write_rate=50
-      , "CSET primitive=" ++ if null primType then "8kx2" else primType
-      , "CSET read_width_a=" ++ show dwidth
-      , "CSET read_width_b=" ++ show dwidth
-      , "CSET register_porta_input_of_softecc=false"
-      , "CSET register_porta_output_of_memory_core=false"
-      , "CSET register_porta_output_of_memory_primitives=false"
-      , "CSET register_portb_output_of_memory_core=false"
-      , "CSET register_portb_output_of_memory_primitives=false"
-      , "CSET register_portb_output_of_softecc=false"
-      , "CSET remaining_memory_locations=0"
-      , "CSET reset_memory_latch_a=false"
-      , "CSET reset_memory_latch_b=false"
-      , "CSET reset_priority_a=CE"
-      , "CSET reset_priority_b=CE"
-      , "CSET reset_type=SYNC"
-      , "CSET softecc=false"
-      , "CSET use_axi_id=false"
-      , "CSET use_byte_write_enable=false"
-      , "CSET use_error_injection_pins=false"
-      , "CSET use_regcea_pin=false"
-      , "CSET use_regceb_pin=false"
-      , "CSET use_rsta_pin=false"
-      , "CSET use_rstb_pin=false"
-      , "CSET write_depth_a=" ++ show (2^awidth)
-      , "CSET write_width_a=" ++ show dwidth
-      , "CSET write_width_b=" ++ show dwidth
-      , "# END Parameters"
-      , "GENERATE"
+      ["set script_path [ file dirname [ file normalize [ info script ] ] ]"
+      ,"set prj_dir [get_property DIRECTORY [current_project]]"
+      ,"set prj_name [get_property NAME [current_project]]"
+      ,"set xci_file $prj_dir/$prj_name.srcs/sources_1/ip/"++name++"/"++name++".xci"
+      ,"create_ip -name blk_mem_gen -vendor xilinx.com -library ip -version 8.4 -module_name " ++ show name
+      ,"set_property -dict [list \\"
+      ,"    CONFIG.Memory_Type {" ++ (if ramType == "ram"
+                                        then "Single_Port_RAM"
+                                        else "True_Dual_Port_RAM") ++ "}\\"
+      ,"    CONFIG.Algorithm {" ++ (if null primType
+                                      then "Minimum_Area"
+                                      else "Fixed_Primitives") ++ "}\\"
+      ,"    CONFIG.Primitive {" ++ (if null primType
+                                      then "8kx2"
+                                      else primType) ++ "}\\"
+      ,"    CONFIG.Write_Width_A {" ++ show dwidth ++ "}\\"
+      ,"    CONFIG.Write_Depth_A {" ++ show (2^awidth) ++ "}\\"
+      ,"    CONFIG.Read_Width_A {" ++ show dwidth ++ "}\\"
+      ,"    CONFIG.Write_Width_B {" ++ show dwidth ++ "}\\"
+      ,"    CONFIG.Read_Width_B {" ++ show dwidth ++ "}\\"
+      ,"    CONFIG.Load_Init_File {" ++ (if coeFile == "no_coe_file_loaded"
+                                           then "false"
+                                           else "true") ++ "}\\"
+      ,"    CONFIG.Coe_File \"$script_path/" ++ coeFile ++ "\"\\"
+      ,"    CONFIG.PRIM_type_to_Implement {BRAM}\\"
+      ,"    CONFIG.Enable_32bit_Address {false}\\"
+      ,"    CONFIG.Use_Byte_Write_Enable {false}\\"
+      ,"    CONFIG.Byte_Size {9}\\"
+      ,"    CONFIG.Assume_Synchronous_Clk {true}\\"
+      ,"    CONFIG.Operating_Mode_A {WRITE_FIRST}\\"
+      ,"    CONFIG.Enable_A {Always_Enabled}\\"
+      ,"    CONFIG.Operating_Mode_B {WRITE_FIRST}\\"
+      ,"    CONFIG.Enable_B {Always_Enabled}\\"
+      ,"    CONFIG.Register_PortA_Output_of_Memory_Primitives {false}\\"
+      ,"    CONFIG.Register_PortB_Output_of_Memory_Primitives {false}\\"
+      ,"    CONFIG.Use_RSTA_Pin {false}\\"
+      ,"    CONFIG.Use_RSTB_Pin {false}\\"
+      ,"    CONFIG.Port_A_Write_Rate {100}\\"
+      ,"    CONFIG.Port_B_Clock {100}\\"
+      ,"    CONFIG.Port_B_Write_Rate {100}\\"
+      ,"    CONFIG.Port_B_Enable_Rate {100}\\"
+      ,"    CONFIG.use_bram_block {Stand_Alone}\\"
+      ,"    CONFIG.EN_SAFETY_CKT {false}] [get_ips " ++ name ++ "]"
+      ,"generate_target all [get_ips " ++ name ++ "]"
+      ,"update_compile_order -fileset sources_1"
       ]
 
 vhdlDecls :: Netlist -> String
@@ -239,18 +191,22 @@ vhdlInsts f nl =
 vhdlInst :: Instantiator
 vhdlInst "low"     = constant "'0'"
 vhdlInst "high"    = constant "'1'"
-vhdlInst "inv"     = gate 1 "inv"
-vhdlInst "and2"    = gate 1 "and2"
-vhdlInst "or2"     = gate 1 "or2"
-vhdlInst "xor2"    = gate 1 "xor2"
-vhdlInst "eq2"     = gate 1 "xnor2"
-vhdlInst "xorcy"   = gate 1 "xorcy"
-vhdlInst "muxcy"   = gate 1 "muxcy"
+vhdlInst "inv"     = lut1 "1" 1
+vhdlInst "and2"    = lut2 "8" 1
+vhdlInst "or2"     = lut2 "E" 1
+vhdlInst "xor2"    = lut2 "6" 1
+vhdlInst "eq2"     = lut2 "9" 1
+vhdlInst "xorcy"   = error "XORCY nor supported" -- lut2 "6" 1
+vhdlInst "muxcy"   = error "MUXCY not supported" --gate 1 "muxf7"
 vhdlInst "name"    = assignName
-vhdlInst "delay"   = delay "fd"
-vhdlInst "delayEn" = delay "fde"
+vhdlInst "delay"   = delay (const "'1'") "fdce"
+vhdlInst "delayEn" = delay (wireStr . head . tail) "fdce"
 vhdlInst "ram"     = instRam
 vhdlInst "dualRam" = instRam2
+vhdlInst "add"   = addsubClb "+"
+                   --addsubDsp False
+vhdlInst "sub"   = addsubClb "-"
+                   --addsubDsp True
 vhdlInst s = error ("Vhdl: unknown component '" ++ s ++ "'")
 
 vhdlArch :: Instantiator -> String -> Netlist -> String
@@ -263,10 +219,10 @@ vhdlArch f name nl =
 
 ramFiles :: Part -> Netlist -> [(String, String)]
 ramFiles part nl = concat
-    [ (ramName ++ ".xco", ramFile part ramName (netName net) params)
+    [ (ramName ++ ".tcl", ramFile part ramName (netName net) params)
       :
       if nonEmpty params then
-         [("init_ram_" ++ compStr (netId net) ++ ".txt", genCoeFile params)]
+         [("init_" ++ ramName ++ ".txt", genCoeFile params)]
       else
          []
     | net <- nets nl
@@ -275,7 +231,7 @@ ramFiles part nl = concat
           params = netParams net
     ]
   where
-    ramAnnotation net = lookupParam (netParams net) "annotation"
+    ramAnnotation net = "" -- lookupParam (netParams net) "annotation"
     nonEmpty params = not (null init)
       where init = read (lookupParam params "init") :: [Integer]
 
@@ -369,6 +325,18 @@ gate n str params comp inps =
   where xs = map (\i -> wireStr (comp, i)) [0..n-1]
         ys = map wireStr inps
 
+lut1 init n params comp inps =
+  compStr comp ++ " : lut1 generic map (INIT => x\"" ++ init ++
+    "\") port map (" ++ argList (xs ++ ys) ++ ");\n"
+  where xs = map (\i -> wireStr (comp, i)) [0..n-1]
+        ys = map wireStr inps
+
+lut2 init n params comp inps =
+  compStr comp ++ " : lut2 generic map (INIT => x\"" ++ init ++
+    "\") port map (" ++ argList (xs ++ ys) ++ ");\n"
+  where xs = map (\i -> wireStr (comp, i)) [0..n-1]
+        ys = map wireStr inps
+
 assignName params comp inps =
   wireStr (comp, 0)  ++ " <= " ++ lookupParam params "name" ++ ";\n"
 
@@ -380,14 +348,44 @@ muxBit params comp [b, a, sel] =
 constant str params comp inps =
   wireStr (comp, 0) ++ " <= " ++ str ++ ";\n"
 
-delay str params comp inps =
+delay enF str params comp inps =
   compStr comp ++ " : " ++ str
                ++ " generic map (INIT => '"
                ++ lookupParam params "init" ++ "') "
                ++ "port map ("
                ++ argList (wireStr (comp, 0) :
-                    "clock" : map wireStr (tail inps))
+                    "clock" : enF inps : "'0'" : wireStr (last inps) : [])
                ++ ");\n"
+
+addsubDsp flag params comp sigs =
+  compStr comp ++ " : ADDSUB_MACRO generic map (LATENCY => 0, WIDTH => " ++ show (1 + length ina) ++
+    ") port map ( clk => clock, rst => '0', carryin => '0', ce => '1', add_sub => '" ++ opType ++ "', "
+                  ++ argList (busMap "a" $ ina ++ [last ina]) ++ ","
+                  ++ argList (busMap "b" $ inb ++ [last inb]) ++ ","
+                  ++ argList (busMap "result" outs1) -- ++ ","
+                  -- ++ "carryout => " ++ (wireStr (comp,width))
+                  ++ ");\n"
+  where
+    opType = if flag then "0"
+                     else "1"
+
+    width = read (lookupParam params "awidth") :: Int
+    (ina, inb) = splitAt width sigs
+    outs1          = map ((,) comp) [0..width]
+
+addsubClb op params comp sigs =
+  "(" ++ consperse ", " (map wireStr $ reverse outs1)
+  ++ ") <= std_logic_vector( "
+  ++ "resize(signed'(" ++ consperse " & " (map wireStr $ reverse ina) ++ "), " ++ show (owidth) ++ ")"
+  ++ op
+  ++ "resize(signed'(" ++ consperse " & " (map wireStr $ reverse inb) ++ "), " ++ show (owidth) ++ ")"
+  ++ ");\n"
+  where
+    owidth = read (lookupParam params "owidth") :: Int
+    awidth = read (lookupParam params "awidth") :: Int
+    bwidth = read (lookupParam params "bwidth") :: Int
+    (ina, inb) = splitAt awidth sigs
+    outs1          = map ((,) comp) [0..owidth-1]
 
 -- Block ram synthesis for Virtex 5 using Xilinx core-generator
 
