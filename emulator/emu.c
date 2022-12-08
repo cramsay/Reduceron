@@ -26,7 +26,7 @@
 #define MAXUSTACKELEMS 512
 #define MAXLSTACKELEMS 512
 #define MAXTEMPLATES   8192
-#define CACHELEN    64
+#define CACHELEN    32
 
 #define NAMELEN 128
 
@@ -277,6 +277,19 @@ void cacheInvalidate(Int addr)
       cache[i].valid = 0;
 }
 
+Bool refInStk(Int addr, Int search_depth)
+{
+  Int i;
+  Atom a;
+  for (i=0; i<search_depth; i++){
+    a = stack[sp-1-i];
+    if (a.tag == VAR && a.contents.var.id == addr){
+      return 1;
+    }
+  }
+  return 0;
+}
+
 void cacheUpdate(Int addr, App app)
 { // Evict by Least-recently-used
   Int i;
@@ -288,7 +301,7 @@ void cacheUpdate(Int addr, App app)
   // Find oldest
   for (i=0, oldestT=cacheTime, updateI=0; i<CACHELEN; i++){
     if (cache[i].valid) {
-      if (oldestT > cache[i].timestamp) {
+      if (oldestT > cache[i].timestamp && !(refInStk(cache[i].addr, 8))) {
         updateI = i;
         oldestT = cache[i].timestamp;
       }
