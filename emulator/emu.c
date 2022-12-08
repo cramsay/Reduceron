@@ -15,9 +15,9 @@
 
 /* Compile-time options */
 
-#define MAXPUSH 9 //8
+#define MAXPUSH 17 //8
 #define APSIZE  9 //6
-#define MAXAPS  9 //4
+#define MAXAPS  4 //4
 #define MAXLUTS 9 //2
 #define MAXREGS 9 // 8
 
@@ -261,6 +261,7 @@ void unwind(Bool sh, Int addr)
   if (sh && !nf(&app)) {
     Update u; u.saddr = sp; u.haddr = addr;
     ustack[usp++] = u;
+    //printf("UPDATE = %5d%5d\n", sp, addr);
   }
 #if ONEBITGC_STUDY1
   if (!sh)
@@ -309,6 +310,7 @@ void update(Atom top, Int saddr, Int haddr)
 {
   Int len = 1 + sp - saddr;
   Int p = sp-2;
+  //printf("Updating (%d,%d)\n", saddr, haddr);
 
   for (;;) {
     if (len < APSIZE) {
@@ -428,19 +430,6 @@ void applyPrim()
   }
 }
 
-/* Case-alt selection */
-
-void caseSelect(Int index)
-{
-  Int lut = lstack[lsp-1];
-  stack[sp-1].tag = FUN;
-  stack[sp-1].contents.fun.original = 1;
-  stack[sp-1].contents.fun.arity = 0;
-  stack[sp-1].contents.fun.id = lut+index;
-  lsp--;
-  caseCount++;
-}
-
 /* Function application */
 
 Atom inst(Int base, Int argPtr, Atom a)
@@ -529,6 +518,21 @@ void apply(Template* t)
 
   slide(spOld, t->arity+1);
 }
+
+/* Case-alt selection */
+
+void caseSelect(Int index)
+{
+  Int lut = lstack[lsp-1];
+  stack[sp-1].tag = FUN;
+  stack[sp-1].contents.fun.original = 1;
+  stack[sp-1].contents.fun.arity = 0;
+  stack[sp-1].contents.fun.id = lut+index;
+  lsp--;
+  caseCount++;
+  apply(&code[lut+index]);
+}
+
 
 /* Garbage collection */
 
@@ -742,7 +746,7 @@ void showAtom(Atom a)
     case REG: printf("r%d%s", a.contents.reg.index, shareStr(a.contents.reg.shared)); break;
     case VAR: printf("h%d%s", a.contents.var.id,    shareStr(a.contents.var.shared)); break;
     case CON: printf("C%d%s", a.contents.con.index, arityStr(a.contents.con.arity)); break;
-    case FUN: printf("%s", code[a.contents.fun.id].name); break;
+    case FUN: printf("F%d", a.contents.fun.id); break;
     case PRI: printf("%s(%s)", a.contents.pri.swap ? "swap:" : "",
                      a.contents.pri.id < LAST_PRIM ? primName[a.contents.pri.id] : "?"); break;
     default: assert(0);
@@ -787,46 +791,47 @@ void dispatch()
     if (hp > MAXHEAPAPPS-200 && canCollect()) collect();
 
     /* Trace */
+    top = stack[sp-1];
 
     if (tracingEnabled) {
-        printf("\n%d:\n", stepno);
-        printf("Heap  :");
-        for (int i = 0; i < hp; ++i)
-            if (heap[i].tag < COLLECTED) {
-                putchar(' ');
-                showApp(i);
-            }
-        printf("\n");
-        printf("Stack :");
+        printf("\nCycle %d h%d: ", stepno, hp);
+        //printf("Heap  : %d", hp);
+        //for (int i = 0; i < hp; ++i)
+        //    if (heap[i].tag < COLLECTED) {
+        //        putchar(' ');
+        //        showApp(i);
+        //    }
+        //printf("\n");
+        //printf("Stack :");
         for (int i = sp - 1; i >= 0; --i) {
-            putchar(' ');
             showAtom(stack[i]);
-        }
-        printf("\n");
-
-        printf("UStack:");
-        for (int i = usp-1; i >= 0; --i) {
-            printf(" %d-h%d", ustack[i].saddr, ustack[i].haddr);
-        }
-        printf("\n");
-
-        printf("Regs  :");
-        for (int i = 0; i < MAXREGS; ++i) {
             putchar(' ');
-            showAtom(registers[i]);
         }
-        printf("\n");
+        //printf("\n");
 
-        printf("LStack:");
-        for (int i = lsp-1; i >= 0; --i) {
-            printf(" %d", lstack[i]);
-        }
-        printf("\n");
+        //printf("UStack:");
+        //for (int i = usp-1; i >= 0; --i) {
+        //    printf(" %d-h%d", ustack[i].saddr, ustack[i].haddr);
+        //}
+        //printf("\n");
 
-        for (int i = 0; i < MAXREGS; ++i)
-            refcntcheck(registers[i]);
-        for (int i = 0; i < sp; ++i)
-            refcntcheck(stack[i]);
+        //printf("Regs  :");
+        //for (int i = 0; i < MAXREGS; ++i) {
+        //    putchar(' ');
+        //    showAtom(registers[i]);
+        //}
+        //printf("\n");
+
+        //printf("LStack:");
+        //for (int i = lsp-1; i >= 0; --i) {
+        //    printf(" %d", lstack[i]);
+        //}
+        //printf("\n");
+
+        //for (int i = 0; i < MAXREGS; ++i)
+        //    refcntcheck(registers[i]);
+        //for (int i = 0; i < sp; ++i)
+        //    refcntcheck(stack[i]);
     }
 
     top = stack[sp-1];
@@ -843,7 +848,10 @@ void dispatch()
         case NUM: assert(stack[sp-2].tag == PRI); applyPrim(); break;
         case FUN: profTable[top.contents.fun.id].callCount++; applyCount++;
                   apply(&code[top.contents.fun.id]); break;
-        case CON: selectCount++; caseSelect(top.contents.con.index); break;
+        case CON: selectCount++;
+                  applyCount++;
+                  caseSelect(top.contents.con.index);
+                  break;
         default: error("dispatch(): invalid tag."); break;
       }
     }
@@ -1090,8 +1098,7 @@ int main(int argc, char *argv[])
   if (verbose) {
       printf("\n==== EXECUTION REPORT ====\n");
       printf("Result      = %12i\n", stack[0].contents.num);
-      ticks = swapCount + primCount + applyCount +
-          unwindCount + updateCount;
+      ticks = swapCount + primCount + applyCount + unwindCount + updateCount;
       printf("Ticks       = %12lld\n", ticks);
       printf("Swap        = %11lld%%\n", (100*swapCount)/ticks);
       printf("Prim        = %11lld%%\n", (100*primCount)/ticks);
