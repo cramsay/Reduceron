@@ -26,6 +26,7 @@
 #define MAXUSTACKELEMS 512
 #define MAXLSTACKELEMS 512
 #define MAXTEMPLATES   8192
+#define CACHELEN    64
 
 #define NAMELEN 128
 
@@ -105,6 +106,8 @@ typedef struct
 
 typedef struct { Int saddr; Int haddr; } Update;
 
+typedef struct { Bool valid; Int addr; Int timestamp; App app; } CacheLine;
+
 const Atom falseAtom = {.tag = CON, .contents.con = {0, 0}};
 
 const Atom trueAtom = {.tag = CON, .contents.con = {0, 1}};
@@ -120,6 +123,7 @@ Update* ustack;
 Lut* lstack;
 Template* code;
 Atom *registers;
+CacheLine* cache;
 
 Int hp, gcLow, gcHigh, sp, usp, lsp, end, gcCount;
 
@@ -131,6 +135,9 @@ Long swapCount, primCount, applyCount, unwindCount,
      updateCount, selectCount, prsCandidateCount, prsSuccessCount, caseCount;
 
 Int maxHeapUsage, maxStackUsage, maxUStackUsage, maxLStackUsage;
+
+Long cacheMisses, cacheHits = 0;
+Int cacheTime = 0;
 
 Bool tracingEnabled = 0;
 int stepno = 0;
@@ -166,6 +173,195 @@ static void __attribute__ ((__noreturn__))
     fputc('\n', stderr);
 
     exit(EXIT_FAILURE);
+}
+
+/* Succint printing of Atoms and Apps:
+   - C2___ for CON 2, arity 3
+   - F3__ for FUN 3, arity 2
+
+   - h3 for heap addr 3
+   - a5 for ARG 5
+   - r7 for reg 7
+ */
+
+/* returns a string of as many _ as n (for n <= 16) */
+static char *arityStr(int n)
+{
+    return "________________" + 16 - n;
+}
+
+static char *shareStr(int sh)
+{
+    return sh ? "*" : "";
+}
+
+void showAtom(Atom a)
+{
+    static const char *primName[] = {
+        "+",
+        "-",
+        "==",
+        "/=",
+        "<=",
+        "emit",
+        "emitInt",
+        "!",
+        ".&.",
+        "st32",
+        "ld32",
+    };
+
+    switch (a.tag) {
+    case NUM: printf("%d", a.contents.num); break;
+    case ARG: printf("a%d%s", a.contents.arg.index, shareStr(a.contents.arg.shared)); break;
+    case REG: printf("r%d%s", a.contents.reg.index, shareStr(a.contents.reg.shared)); break;
+    case VAR: printf("h%d%s", a.contents.var.id,    shareStr(a.contents.var.shared)); break;
+    case CON: printf("C%d%s", a.contents.con.index, arityStr(a.contents.con.arity)); break;
+    case FUN: printf("F%d", a.contents.fun.id); break;
+    case PRI: printf("%s(%s)", a.contents.pri.swap ? "swap:" : "",
+                     a.contents.pri.id < LAST_PRIM ? primName[a.contents.pri.id] : "?"); break;
+    default: assert(0);
+    }
+}
+
+void showApp2(App app)
+{
+  switch (app.tag) {
+  case AP: break;
+  case CASE: printf("CASE F%d ", app.details.lut); break;
+  case PRIM: printf("r%d=", app.details.regId); break;
+  case COLLECTED:printf("COLLECTED"); return;
+  case INVALID: printf("INVALID"); return;
+  default: assert(0);
+  }
+
+  for (int i = 0; i < app.size; ++i) {
+    if (i)
+      putchar(' ');
+    showAtom(app.atoms[i]);
+  }
+  printf("\n");
+}
+
+void showApp(int addr)
+{
+    App app = heap[addr];
+
+    printf("%d(", addr);
+
+    switch (app.tag) {
+    case AP: break;
+    case CASE: printf("CASE F%d ", app.details.lut); break;
+    case PRIM: printf("r%d=", app.details.regId); break;
+    case COLLECTED:printf("COLLECTED"); return;
+    case INVALID: printf("INVALID"); return;
+    default: assert(0);
+    }
+
+    for (int i = 0; i < app.size; ++i) {
+        if (i)
+            putchar(' ');
+        showAtom(app.atoms[i]);
+    }
+    printf(")");
+}
+
+
+/* Caching */
+
+void cacheInvalidate(Int addr)
+{
+  Int i;
+  for (i=0; i<CACHELEN; i++)
+    if (cache[i].addr == addr)
+      cache[i].valid = 0;
+}
+
+void cacheUpdate(Int addr, App app)
+{ // Evict by Least-recently-used
+  Int i;
+  Int oldestT, updateI;
+  CacheLine line;
+
+  cacheInvalidate(addr);
+
+  // Find oldest
+  for (i=0, oldestT=cacheTime, updateI=0; i<CACHELEN; i++){
+    if (cache[i].valid) {
+      if (oldestT > cache[i].timestamp) {
+        updateI = i;
+        oldestT = cache[i].timestamp;
+      }
+    } else {
+      updateI = i;
+      oldestT = -1;
+    }
+  }
+
+  // Update cache line
+  line.app = app;
+  line.valid = 1;
+  line.addr = addr;
+  line.timestamp = cacheTime++;
+  cache[updateI] = line;
+
+  //printf("Updated entry for %d in line %d\n", addr, updateI);
+  //showApp2(cache[updateI].app);
+}
+
+App cachedRead(Int addr)
+{
+  Int i;
+  App app;
+
+  // check for entry in cache
+  for (i=0; i<CACHELEN; i++){
+    if (cache[i].valid && cache[i].addr == addr) {
+      // Found it, update timestamp and return
+      cacheHits++;
+      cache[i].timestamp = cacheTime++;
+      //printf("Cache hit for %d in line %d\n", addr, i);
+      //showApp2(cache[i].app);
+      return cache[i].app;
+    }
+  }
+
+  // Didn't find it
+  //printf("Cache miss for %d...: ", addr);
+  cacheMisses++;
+  app = heap[addr];
+  cacheUpdate(addr, app);
+  return app;
+}
+
+void cachedWrite(Int addr, App app)
+{
+  cacheUpdate(addr, app);
+  heap[addr] = app;
+}
+
+void gcCache()
+{
+  Int i;
+  App app;
+
+  for (i = 0; i < CACHELEN; i++) {
+
+    if (cache[i].valid) {
+      app = heap[cache[i].addr];
+
+      if (app.tag >= INVALID)
+        error("Yikes! Cache points to invalid heap cell");
+
+      if (app.tag == COLLECTED) {
+        cache[i].addr = app.atoms[0].contents.var.id;
+        cache[i].app  = heap2[cache[i].addr];
+      } else {
+        cache[i].valid = 0;
+      }
+    }
+
+  }
 }
 
 /* Display profiling table */
@@ -207,6 +403,7 @@ void collectApp(Int addr)
 
 void showAtom(Atom);
 
+/*
 static void refcntcheck(Atom a)
 {
     if (a.tag == VAR && !a.contents.var.shared &&
@@ -216,7 +413,7 @@ static void refcntcheck(Atom a)
         fprintf(stderr, "\n");
         assert(0);
     }
-}
+    }*/
 
 /* Dashing */
 
@@ -253,7 +450,7 @@ void pushAtoms(Int size, Atom* atoms)
 
 void unwind(Bool sh, Int addr)
 {
-  App app = heap[addr];
+  App app = cachedRead(addr);
 
   if (app.tag >= INVALID)
       error("unwind(): invalid tag.");
@@ -304,6 +501,7 @@ void upd(Atom top, Int sp, Int len, Int hp)
     heap[hp].atoms[i] = a;
     stack[j] = a;
   }
+  cachedWrite(hp, heap[hp]);
 }
 
 void update(Atom top, Int saddr, Int haddr)
@@ -483,6 +681,7 @@ void instApp(Int base, Int argPtr, App *app)
       new->size = app->size;
       for (i = 0; i < app->size; i++)
         new->atoms[i] = inst(base, argPtr, app->atoms[i]);
+      cachedWrite(hp, *new);
       hp++;
     }
   }
@@ -493,6 +692,7 @@ void instApp(Int base, Int argPtr, App *app)
       new->atoms[i] = inst(base, argPtr, app->atoms[i]);
     if (app->tag == CASE) new->details.lut = app->details.lut;
     if (app->tag == AP) new->details.normalForm = app->details.normalForm;
+    cachedWrite(hp, *new);
     hp++;
   }
 }
@@ -624,6 +824,7 @@ void collect()
   for (i = 0; i < sp; i++) stack[i] = copyChild(stack[i]);
   copy();
   updateUStack();
+  gcCache();
   tmp = heap; heap = heap2; heap2 = tmp;
 
 #ifdef ONEBITGC_STUDY1
@@ -661,6 +862,7 @@ void alloc()
   code = (Template*) malloc(sizeof(Template) * MAXTEMPLATES);
   registers = (Atom*) calloc(sizeof(Atom), MAXREGS);
   profTable = (ProfEntry*) malloc(sizeof(ProfEntry) * MAXTEMPLATES);
+  cache = (CacheLine*) calloc(sizeof(CacheLine), CACHELEN);
 }
 
 /* Initialise globals */
@@ -702,78 +904,6 @@ void integerAddOverflow(int a, int b)
 {
     error("integer range exhausted in addition of %d+%d = %d",
           a, b, a+b);
-}
-
-/* Succint printing of Atoms and Apps:
-   - C2___ for CON 2, arity 3
-   - F3__ for FUN 3, arity 2
-
-   - h3 for heap addr 3
-   - a5 for ARG 5
-   - r7 for reg 7
- */
-
-/* returns a string of as many _ as n (for n <= 16) */
-static char *arityStr(int n)
-{
-    return "________________" + 16 - n;
-}
-
-static char *shareStr(int sh)
-{
-    return sh ? "*" : "";
-}
-
-void showAtom(Atom a)
-{
-    static const char *primName[] = {
-        "+",
-        "-",
-        "==",
-        "/=",
-        "<=",
-        "emit",
-        "emitInt",
-        "!",
-        ".&.",
-        "st32",
-        "ld32",
-    };
-
-    switch (a.tag) {
-    case NUM: printf("%d", a.contents.num); break;
-    case ARG: printf("a%d%s", a.contents.arg.index, shareStr(a.contents.arg.shared)); break;
-    case REG: printf("r%d%s", a.contents.reg.index, shareStr(a.contents.reg.shared)); break;
-    case VAR: printf("h%d%s", a.contents.var.id,    shareStr(a.contents.var.shared)); break;
-    case CON: printf("C%d%s", a.contents.con.index, arityStr(a.contents.con.arity)); break;
-    case FUN: printf("F%d", a.contents.fun.id); break;
-    case PRI: printf("%s(%s)", a.contents.pri.swap ? "swap:" : "",
-                     a.contents.pri.id < LAST_PRIM ? primName[a.contents.pri.id] : "?"); break;
-    default: assert(0);
-    }
-}
-
-void showApp(int addr)
-{
-    App app = heap[addr];
-
-    printf("%d(", addr);
-
-    switch (app.tag) {
-    case AP: break;
-    case CASE: printf("CASE F%d ", app.details.lut); break;
-    case PRIM: printf("r%d=", app.details.regId); break;
-    case COLLECTED:printf("COLLECTED"); return;
-    case INVALID: printf("INVALID"); return;
-    default: assert(0);
-    }
-
-    for (int i = 0; i < app.size; ++i) {
-        if (i)
-            putchar(' ');
-        showAtom(app.atoms[i]);
-    }
-    printf(")");
 }
 
 void dispatch()
@@ -1113,6 +1243,7 @@ int main(int argc, char *argv[])
       printf("Max Stack   = %12d\n", maxStackUsage);
       printf("Max UStack  = %12d\n", maxUStackUsage);
       printf("Max LStack  = %12d\n", maxLStackUsage);
+      printf("Cache hit   = %11lld%%\n", 100 * cacheHits / (cacheHits+cacheMisses));
       printf("==========================\n");
   }
   else
