@@ -27,6 +27,7 @@
 #define MAXLSTACKELEMS 512
 #define MAXTEMPLATES   8192
 #define CACHELEN    32
+#define TCACHELEN   16
 
 #define NAMELEN 128
 
@@ -107,6 +108,7 @@ typedef struct
 typedef struct { Int saddr; Int haddr; } Update;
 
 typedef struct { Bool valid; Int addr; Int timestamp; App app; } CacheLine;
+typedef struct { Bool valid; Int addr; Int timestamp; Template tmpl; } TCacheLine;
 
 const Atom falseAtom = {.tag = CON, .contents.con = {0, 0}};
 
@@ -124,6 +126,7 @@ Lut* lstack;
 Template* code;
 Atom *registers;
 CacheLine* cache;
+TCacheLine* tcache;
 
 Int hp, gcLow, gcHigh, sp, usp, lsp, end, gcCount;
 
@@ -138,6 +141,9 @@ Int maxHeapUsage, maxStackUsage, maxUStackUsage, maxLStackUsage;
 
 Long cacheMisses, cacheHits = 0;
 Int cacheTime = 0;
+
+Long tcacheMisses, tcacheHits = 0;
+Int tcacheTime = 0;
 
 Bool tracingEnabled = 0;
 int stepno = 0;
@@ -375,6 +381,61 @@ void gcCache()
     }
 
   }
+}
+
+void tcacheUpdate(Int addr, Template tmpl)
+{ // Evict by Least-recently-used
+  Int i;
+  Int oldestT, updateI;
+  TCacheLine line;
+
+  // Find oldest
+  for (i=0, oldestT=tcacheTime, updateI=0; i<TCACHELEN; i++){
+    if (tcache[i].valid) {
+      if (oldestT > tcache[i].timestamp) {
+        updateI = i;
+        oldestT = tcache[i].timestamp;
+      }
+    } else {
+      updateI = i;
+      oldestT = -1;
+    }
+  }
+
+  // Update tcache line
+  line.tmpl = tmpl;
+  line.valid = 1;
+  line.addr = addr;
+  line.timestamp = tcacheTime++;
+  tcache[updateI] = line;
+
+  //printf("Updated entry for %d in line %d\n", addr, updateI);
+  //showApp2(tcache[updateI].app);
+}
+
+Template tcachedRead(Int addr)
+{
+  Int i;
+  Template tmpl;
+
+  // check for entry in tcache
+  for (i=0; i<TCACHELEN; i++){
+    if (tcache[i].valid && tcache[i].addr == addr) {
+      // Found it, update timestamp and return
+      tcacheHits++;
+      tcache[i].timestamp = tcacheTime++;
+      //printf("Tcache hit for %d in line %d\n", addr, i);
+      //showApp2(tcache[i].app);
+      return tcache[i].tmpl;
+    }
+  }
+
+  // Didn't find it
+  //printf("Tcache miss for %d...: ", addr);
+  tcacheMisses++;
+  tmpl = code[addr];
+  tcacheUpdate(addr, tmpl);
+  return tmpl;
 }
 
 /* Display profiling table */
@@ -737,13 +798,15 @@ void apply(Template* t)
 void caseSelect(Int index)
 {
   Int lut = lstack[lsp-1];
+  Template tmpl;
   stack[sp-1].tag = FUN;
   stack[sp-1].contents.fun.original = 1;
   stack[sp-1].contents.fun.arity = 0;
   stack[sp-1].contents.fun.id = lut+index;
   lsp--;
   caseCount++;
-  apply(&code[lut+index]);
+  tmpl = tcachedRead(lut+index);
+  apply(&tmpl);
 }
 
 
@@ -876,6 +939,7 @@ void alloc()
   registers = (Atom*) calloc(sizeof(Atom), MAXREGS);
   profTable = (ProfEntry*) malloc(sizeof(ProfEntry) * MAXTEMPLATES);
   cache = (CacheLine*) calloc(sizeof(CacheLine), CACHELEN);
+  tcache = (TCacheLine*) calloc(sizeof(TCacheLine), TCACHELEN);
 }
 
 /* Initialise globals */
@@ -922,6 +986,7 @@ void integerAddOverflow(int a, int b)
 void dispatch()
 {
   Atom top;
+  Template tmpl;
 
   while (!(sp == 1 && stack[0].tag == NUM)) {
       if (sp > maxStackUsage) maxStackUsage = sp;
@@ -990,7 +1055,8 @@ void dispatch()
       switch (top.tag) {
         case NUM: assert(stack[sp-2].tag == PRI); applyPrim(); break;
         case FUN: profTable[top.contents.fun.id].callCount++; applyCount++;
-                  apply(&code[top.contents.fun.id]); break;
+                  tmpl = tcachedRead(top.contents.fun.id);
+                  apply(&tmpl); break;
         case CON: selectCount++;
                   applyCount++;
                   caseSelect(top.contents.con.index);
@@ -1243,6 +1309,7 @@ int main(int argc, char *argv[])
       printf("Result      = %12i\n", stack[0].contents.num);
       ticks = swapCount + primCount + applyCount + unwindCount + updateCount;
       printf("Ticks       = %12lld\n", ticks);
+      ticks = 100;
       printf("Swap        = %11lld%%\n", (100*swapCount)/ticks);
       printf("Prim        = %11lld%%\n", (100*primCount)/ticks);
       printf("Unwind      = %11lld%%\n", (100*unwindCount)/ticks);
@@ -1257,6 +1324,7 @@ int main(int argc, char *argv[])
       printf("Max UStack  = %12d\n", maxUStackUsage);
       printf("Max LStack  = %12d\n", maxLStackUsage);
       printf("Cache hit   = %11lld%%\n", 100 * cacheHits / (cacheHits+cacheMisses));
+      printf("TCache hit   = %11lld%%\n", 100 * tcacheHits / (tcacheHits+tcacheMisses));
       printf("==========================\n");
   }
   else
