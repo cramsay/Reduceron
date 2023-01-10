@@ -1,0 +1,19 @@
+
+==== EXECUTION REPORT ====
+Result      =            0
+Ticks       =     67003155
+Swap        =           0%
+Prim        =           5%
+Unwind      =          29%
+Update      =           6%
+Apply       =          58%
+PRS Success =          98%
+#GCs        =         1298
+#Cases      =     32155227
+Max Heap    =         1390
+Max Stack   =          108
+Max UStack  =            9
+Max LStack  =           96
+Cache hit   =          37%
+TCache hit   =          70%
+==========================

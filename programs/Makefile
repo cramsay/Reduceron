@@ -3,7 +3,7 @@
 #
 # Sudoku after Parts, but is omitted as it uses "emit" which has no hardware
 # support
-WORKLOADS=And SmallFib Example Fib Parts CountDown KnuthBendix Adjoxo \
+WORKLOADS=SmallFib Example Fib Parts CountDown KnuthBendix Adjoxo \
           Cichelli Taut While MSS Braun Clausify Queens OrdList Queens2 \
           PermSort SumPuz Mate2 Mate
 

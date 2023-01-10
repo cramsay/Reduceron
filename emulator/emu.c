@@ -1349,7 +1349,6 @@ int main(int argc, char *argv[])
       printf("Result      = %12i\n", stack[0].contents.num);
       ticks = swapCount + primCount + applyCount + unwindCount + updateCount;
       printf("Ticks       = %12lld\n", ticks);
-      ticks = 100;
       printf("Swap        = %11lld%%\n", (100*swapCount)/ticks);
       printf("Prim        = %11lld%%\n", (100*primCount)/ticks);
       printf("Unwind      = %11lld%%\n", (100*unwindCount)/ticks);

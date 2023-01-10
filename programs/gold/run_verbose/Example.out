@@ -1,0 +1,19 @@
+
+==== EXECUTION REPORT ====
+Result      =            6
+Ticks       =           20
+Swap        =          15%
+Prim        =          15%
+Unwind      =          30%
+Update      =          10%
+Apply       =          30%
+PRS Success =           0%
+#GCs        =            0
+#Cases      =            3
+Max Heap    =            0
+Max Stack   =            8
+Max UStack  =            2
+Max LStack  =            1
+Cache hit   =         100%
+TCache hit   =          16%
+==========================
