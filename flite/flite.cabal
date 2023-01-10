@@ -23,33 +23,16 @@ Extra-Source-Files: README examples/*.hs
 
 Executable flite
     Main-is:       fl-parsec.hs
-    Build-Depends:  array        >= 0.5.3 && < 0.6,
-                    base         >= 4.12.0 && < 4.13,
-                    containers   >= 0.6.0 && < 0.7,
-                    parsec       >= 3.1.13 && < 3.2
+    Build-Depends: base >= 3 && < 5,
+                   array >= 0 && < 1, containers >= 0 && < 1,
+                   parsec >= 3
     Other-Modules:  Flite.CallGraph, Flite.Case, Flite.Compile, Flite.CompileBackend
                     Flite.CompileFrontend, Flite.ConcatApp, Flite.Descend, Flite.Flatten,
                     Flite.Fresh, Flite.Identify, Flite.Identity, Flite.Inline, Flite.Interp,
                     Flite.InterpFrontend, Flite.LambdaLift, Flite.Let, Flite.Matching,
                     Flite.Predex, Flite.Pretty, Flite.RedCompile, Flite.RedFrontend,
                     Flite.RedSyntax, Flite.State, Flite.Strictify, Flite.Syntax,
-                    Flite.Traversals, Flite.Writer, Flite.WriterState,
-                    Flite.Parsec.Parse, Flite.Parsec.Flite, Flite.Parsec.Prelude,
-                    Flite.Dependency, Flite.IntInfer, Flite.Strictness, Flite.WorkerWrapper,
-                    Paths_flite
-
-library
-    Build-Depends:  array        >= 0.5.3 && < 0.6,
-                    base         >= 4.12.0 && < 4.13,
-                    containers   >= 0.6.0 && < 0.7,
-                    parsec       >= 3.1.13 && < 3.2
-    Exposed-Modules:  Flite.CallGraph, Flite.Case, Flite.Compile, Flite.CompileBackend
-                    Flite.CompileFrontend, Flite.ConcatApp, Flite.Descend, Flite.Flatten,
-                    Flite.Fresh, Flite.Identify, Flite.Identity, Flite.Inline, Flite.Interp,
-                    Flite.InterpFrontend, Flite.LambdaLift, Flite.Let, Flite.Matching,
-                    Flite.Predex, Flite.Pretty, Flite.RedCompile, Flite.RedFrontend,
-                    Flite.RedSyntax, Flite.State, Flite.Strictify, Flite.Syntax,
-                    Flite.Traversals, Flite.Writer, Flite.WriterState,
+                    Flite.Traversals, Flite.Writer, Flite.Writer, Flite.WriterState,
                     Flite.Parsec.Parse, Flite.Parsec.Flite, Flite.Parsec.Prelude,
                     Flite.Dependency, Flite.IntInfer, Flite.Strictness, Flite.WorkerWrapper,
                     Paths_flite

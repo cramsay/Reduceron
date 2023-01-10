@@ -34,7 +34,6 @@ subst :: Exp -> Id -> Exp -> Exp
 subst x v = sub
   where
     sub (Var w) | v == w = x
-    sub (Fun w) | v == w = x
     sub (Let bs e) | v `elem` map fst bs = Let bs e
     sub (Case e as) = Case (sub e)
                            [ (p, if v `elem` patVars p then e else sub e)

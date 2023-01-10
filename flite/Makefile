@@ -1,3 +1,3 @@
 dist/build/Flite/flite.always:
-	cabal configure
-	cabal $(J) build
+	cabal v1-configure
+	cabal $(J) v1-build

@@ -37,7 +37,7 @@ bench: bench-flite-c-comp
 $(EMU): ../emulator/emu.c
 	$(MAKE) -C ../emulator emu
 
-$(FLITE): flite.built
+$(FLITE): 
 	$(MAKE) -C ../flite
 	touch flite.built
 
