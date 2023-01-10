@@ -60,19 +60,26 @@ newHeap ramAlgorithm annotation =
      sigReset    <- newSig
 
 
+     -- CR: I added delays here to test potential pipelining
      let ramInsA = RamInputs {
-                     ramData    = val sigInputA
-                   , ramAddress = val sigAddressA
-                   , ramWrite   = vhead (val sigWriteA)
+                     ramData    = -- delay 0 $
+                                  val sigInputA
+                   , ramAddress = -- delay 0 $
+                                  val sigAddressA
+                   , ramWrite   = -- delay low $
+                                  vhead (val sigWriteA)
                    }
 
      let ramInsB = RamInputs {
-                     ramData    = val sigInputB
-                   , ramAddress = val sigAddressB
-                   , ramWrite   = vhead (val sigWriteB)
+                     ramData    = -- delay 0 $
+                                  val sigInputB
+                   , ramAddress = -- delay 0 $
+                                  val sigAddressB
+                   , ramWrite   = -- delay low $
+                                  vhead (val sigWriteB)
                    }
 
-     let (ramOutsA, ramOutsB) = dualRam [] ("heap_" ++ annotation) ramAlgorithm (ramInsA, ramInsB)
+     let (ramOutsA, ramOutsB) = dualRam URAM [] ("heap_" ++ annotation) ramAlgorithm (ramInsA, ramInsB)
 
      let incA = vhead (val sigIncA)
      let incB = vhead (val sigIncB)

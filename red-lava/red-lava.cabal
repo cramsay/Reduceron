@@ -27,6 +27,8 @@ Exposed-modules:
   Lava.Prelude
   Lava.Vector
   Lava.Vhdl
+  Lava.Verilog
+  Lava.C
 Extra-Source-Files:
   examples/Cube/Cube.hs
   examples/HalfAdd/HalfAdd.hs

@@ -55,20 +55,16 @@ run flags fileName =
                      --(r.result.val, fin)
                      --(nameWord "result", name "finish")
                      (r.result.val, r.state, r.heap.Heap.size,
-                      r.ioWrite.val, r.ioAddr.val, r.ioWriteData.val,
                       fin)
                      (nameWord "result", nameWord "state", nameWord "heapSize",
-                      nameWord "ioWrite", nameWord "ioAddr", nameWord "ioWriteData",
                       name "finish")
      when (GenVerilog `elem` flags) $
        let (r, fin) = recipe (newReduceron code) dispatch (delay high low)
        in  writeVerilog2 outName "Reduceron"
                      (r.result.val, r.state, r.heap.Heap.size,
-                      r.ioAddr.val, r.ioWrite.val, r.ioRead.val, r.ioWriteData.val,
                       -- r.ioReadData.val, r.ioWait.val,
                       fin)
                      (nameWord "result", nameWord "state", nameWord "heapSize",
-                      nameWord "ioAddr", nameWord "ioWrite", nameWord "ioRead", nameWord "ioWriteData",
                       -- nameWord "ioReadData", nameWord "ioWait",
                       name "finish")
      when (GenC `elem` flags) $

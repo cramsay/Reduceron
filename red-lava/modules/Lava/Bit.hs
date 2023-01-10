@@ -32,6 +32,7 @@ module Lava.Bit
     -- * RAMs
   , RamInps(..)
   , RamAlgorithm(..)
+  , RamType(..)
   , primRam
   , primDualRam
 
@@ -392,6 +393,14 @@ data RamInps =
 data RamAlgorithm =
   MinArea | Width1 | Width2 | Width4 | Width9 | Width18 | Width36
 
+data RamType = Auto | BRAM | URAM | DRAM
+
+instance Show RamType where
+  show Auto = "auto"
+  show BRAM = "block"
+  show URAM = "ultra"
+  show DRAM = "distributed"
+
 encodeRamAlgorithm :: RamAlgorithm -> String
 encodeRamAlgorithm MinArea = ""
 encodeRamAlgorithm Width1 = "16kx1"
@@ -403,8 +412,8 @@ encodeRamAlgorithm Width36 = "512x36"
 
 -- | Single-port RAM with initialiser.  Use 'Lava.Prelude.ram' for
 -- stronger type-safety.
-primRam :: [Integer] -> String -> RamAlgorithm -> RamInps -> [Bit]
-primRam init annotation ramAlg ins =
+primRam :: RamType -> [Integer] -> String -> RamAlgorithm -> RamInps -> [Bit]
+primRam resType init annotation ramAlg ins =
     makeComponent "ram"
   {-   Inputs: -} ([writeEnable ins] ++ dataBus ins ++ addressBus ins)
   {-  Outputs: -} dwidth
@@ -414,6 +423,7 @@ primRam init annotation ramAlg ins =
                   , "awidth" :-> show awidth
                   , "primtype" :-> pt
                   , "annotation" :-> annotation
+                  , "resourceType" :-> show resType
                   ]
   {- Continue: -} id
   where
@@ -423,8 +433,8 @@ primRam init annotation ramAlg ins =
 
 -- | Dual-port RAM with initialiser.  Use 'Lava.Prelude.dualRam' for
 -- stronger type-safety.
-primDualRam :: [Integer] -> String -> RamAlgorithm -> (RamInps, RamInps) -> ([Bit], [Bit])
-primDualRam init annotation ramAlg (ins1, ins2) =
+primDualRam :: RamType -> [Integer] -> String -> RamAlgorithm -> (RamInps, RamInps) -> ([Bit], [Bit])
+primDualRam resType init annotation ramAlg (ins1, ins2) =
     makeComponent "dualRam"
   {-   Inputs: -} ([writeEnable ins1] ++ [writeEnable ins2] ++
                    dataBus ins1       ++ dataBus ins2       ++
@@ -436,6 +446,7 @@ primDualRam init annotation ramAlg (ins1, ins2) =
                   , "awidth" :-> show awidth
                   , "primtype" :-> pt
                   , "annotation" :-> annotation
+                  , "resourceType" :-> show resType
                   ]
   {- Continue: -} (splitAt dwidth)
   where

@@ -25,10 +25,10 @@ data Collect =
   , newAtom0      :: Reg AtomN
   , newAtom1      :: Reg AtomN
   , newAtom2      :: Reg AtomN
-  , usp           :: Reg UStackAddrN
-  , uspNew        :: Reg UStackAddrN
-  , ustack        :: Unistack UStackAddrN UpdateN
-  , ustackSize    :: Reg UStackAddrN
+  , usp           :: Reg N12
+  , uspNew        :: Reg N12
+  , ustack        :: Unistack N12 UpdateN
+  , ustackSize    :: Reg N12
   , stack         :: Octostack AtomN
   , savedTop      :: Reg AtomN
   , newTop        :: Sig AtomN
@@ -97,14 +97,11 @@ Algorithm:
 collect top c = do c.collecting <== 1 -- for profiling
                    c.savedTop <== top
                    tick
-
                    c.toSpace.reset   -- added
                    c.gcCount <== c.gcCount.val + 1
                    tick
-
                    c.dumpStack       -- added
                    tick              -- added
-
                    c.toSpace.snocA (c.root.val) -- added 2
                    tick                         -- added 2
 

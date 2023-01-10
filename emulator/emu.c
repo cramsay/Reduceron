@@ -442,7 +442,9 @@ Template tcachedRead(Int addr)
 
 void displayProfTable()
 {
-  Int i, j, ticksPerCall;
+  Int i, j, ticksPerCall, apLenAcc, apsAcc;
+  float callRatio, avgPushLen, avgApLen, avgAps;
+
   printf("\nPROFILING TABLE:\n");
   printf("+----------------------------------+------+----------+\n");
   printf("| %-32s | %4s | %8s |\n", "FUNCTION", "SIZE", "%TIME");
@@ -463,6 +465,43 @@ void displayProfTable()
     }
   }
   printf("+----------------------------------+------+----------+\n");
+
+  printf("\n\nTEMPLATE STATS TABLE:\n");
+  printf("+------+----------------------+--------+---------+---------+----------+\n");
+  printf("| %-4s | %-20s | %6s | %7s | %7s | %8s |\n", "ADDR", "FUNCTION", "%CALLS", "PushLen", "HeapAps", "AvgApLen");
+  printf("+------+----------------------+--------+---------+---------+----------+\n");
+
+  for (i = 0, apsAcc = 0; i < numTemplates; i++)
+    if (profTable[i].seen)
+      apsAcc += profTable[i].callCount * code[i].numApps;
+
+  avgPushLen = 0; avgApLen = 0; avgAps = 0;
+  for (i = 0; i < numTemplates; i++) {
+    if (profTable[i].seen) {
+      for (j=0, apLenAcc = 0; j < code[i].numApps; j++)
+        apLenAcc += code[i].apps[j].size;
+      callRatio = (double)(profTable[i].callCount)/(double)applyCount;
+      if (code[i].numApps>0)
+        avgApLen += (double)profTable[i].callCount*(double)apLenAcc/(double)code[i].numApps/(double)apsAcc;
+      avgAps += callRatio*(double)code[i].numApps;
+      avgPushLen += callRatio*(double)code[i].numPushs;
+
+      printf("|  %3i | %-20s | %6.2f |      %2i |       %1i |    %6.2f |\n",
+             i,
+             code[i].name,
+             callRatio*100.0,
+             code[i].numPushs,
+             code[i].numApps,
+             ((double)apLenAcc/(double)code[i].numApps));
+    }
+  }
+  printf("+------+----------------------+--------+---------+---------+----------+\n\n");
+  printf("Average Push Len  = %6.2f \n", avgPushLen);
+  printf("Average Heap Apps = %6.2f \n", avgAps);
+  printf("Average App  Len  = %6.2f \n", avgApLen);
+  printf("Total unfolds = %11lld\n", applyCount);
+  printf("Total ticks   = %11lld\n",
+         swapCount + primCount + applyCount + unwindCount + updateCount);
 }
 
 #if ONEBITGC_STUDY1
@@ -806,6 +845,7 @@ void caseSelect(Int index)
   lsp--;
   caseCount++;
   tmpl = tcachedRead(lut+index);
+  profTable[lut+index].callCount++;
   apply(&tmpl);
 }
 
@@ -1249,7 +1289,7 @@ static void usage(void)
             "\n"
             "       -v -- enable verbosity\n"
             "       -t -- enable tracing\n"
-            "       -v -- enable profiling\n",
+            "       -p -- enable profiling\n",
             program_name);
 
     exit(EXIT_FAILURE);

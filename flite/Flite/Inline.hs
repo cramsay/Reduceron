@@ -27,10 +27,12 @@ inline :: InlineFlag -> Prog -> Fresh Prog
 inline i p = onExpM inl p
   where
     cg = closure (callGraph p)
+    -- For non-recursive functions (unapplied)
     inl (Fun f)
       | f `notElem` depends cg f =
         case lookupFuncs f p of
-          Func f [] rhs:_ | checkInline i (numApps rhs) -> inl rhs
+          -- Inline if arity is number of applications is small enough
+          Func f [] rhs:_ | checkInline i (numApps rhs) ->  inl rhs
           _ -> return (Fun f)
     inl (App (Fun f) es)
       | f `notElem` depends cg f =

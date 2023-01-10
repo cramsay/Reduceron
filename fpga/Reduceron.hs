@@ -40,21 +40,14 @@ data Reduceron =
   , state      :: State
   , dashTopN   :: Sig N3
   , vstack     :: Octostack AtomN
-  , ustack     :: Unistack UStackAddrN UpdateN
-  , astack     :: Unistack LStackAddrN FunAddrN
+  , ustack     :: Unistack N12 UpdateN
+  , astack     :: Unistack N12 FunAddrN
   , heap       :: Heap HeapAddrN AppN
   , code       :: Code TemplateN
   , regFile1   :: RegFile N4 AtomN
   , regFile2   :: RegFile N4 AtomN
   , result     :: Reg AtomN
   , collector  :: Collect
-  , ioAddr     :: Sig NumberN
-  , ioWriteData:: Sig NumberN
-  , ioWrite    :: Sig N1
-  , ioRead     :: Sig N1
-  , ioWait          :: Bit
-  , ioReadDataValid :: Bit
-  , ioReadData      :: Word NumberN
   }
 
 newReduceron :: [Integer] -> New Reduceron
@@ -76,11 +69,6 @@ newReduceron program =
      let next = nextState (nt.val) du (v.OS.newSize) (h.Heap.size)
                   (col.collecting.val.vhead)
 
-     ioAddr      <- newSig
-     ioWrite     <- newSig
-     ioWriteData <- newSig
-     ioRead      <- newSig
-
      return $ Reduceron {
                 top        = delay 0 (nt.val)
               , newTop     = nt
@@ -95,13 +83,6 @@ newReduceron program =
               , regFile2   = rf2
               , result     = res
               , collector  = col
-              , ioAddr     = ioAddr
-              , ioWrite    = ioWrite
-              , ioWriteData= ioWriteData
-              , ioRead     = ioRead
-              , ioWait          = name "ioWait"
-              , ioReadDataValid = name "ioReadDataValid"
-              , ioReadData      = nameWord "ioReadData"
               }
 
 {-
@@ -393,13 +374,7 @@ prim r = iff (isSwapState (r.state)) $do
 
              iff (ready) $do
                  r.newTop <== result
-                 iff (inv st32) $ r.vstack.update (-2) 0 []
-
-                 -- Handle IO primitives
-                 iff (st32) $do r.vstack.update (-3) 0 []
-                                r.ioWrite     <== 1
-                                r.ioAddr      <== sw ? (arg2.intValue, arg1.intValue)
-                                r.ioWriteData <== sw ? (arg1.intValue, arg2.intValue)
+                 r.vstack.update (-2) 0 []
 
              iff (inv ready) $do
                  r.newTop <== arg2
@@ -407,14 +382,13 @@ prim r = iff (isSwapState (r.state)) $do
 
   where
     pr = r.vstack.OS.tops `vat` n0
-    st32 = isST32 pr
     sw = pr.getSwapBit
     arg1 = r.top
     arg2 = r.vstack.OS.tops `vat` n1
     ready = arg2.isINT
     result0 = alu pr (arg1.intValue) (arg2.intValue)
     result1 = alu pr (arg2.intValue) (arg1.intValue)
-    result = st32 ? (r.vstack.OS.tops `vat` n2, sw ? (result1, result0))
+    result = sw ? (result1, result0)
 
 alu f a b =
   pickG
@@ -422,7 +396,6 @@ alu f a b =
     , isSUB f --> makeINT (a-b)
     , (isNEQ f <|> isEQ f) --> bool ((a === b) <#> isNEQ f)
     , isLEQ f --> bool (Signed a |<=| Signed b)
-    , isAND f --> makeINT (vzipWith (<&>) a b)
     ]
 
 {-

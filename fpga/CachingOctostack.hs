@@ -80,7 +80,7 @@ octostack' annotation offset writes pushes = (size, newSize, outputs)
 
     ramIns     = reverse (rotLeft rotVal' pushes)
     ramWrites  = reverse (rotl rotVal writes)
-    ramOuts    = map (ram [] ("octostack_" ++ annotation) ramAlgorithm)
+    ramOuts    = map (ram Auto [] ("octostack_" ++ annotation) ramAlgorithm)
                      (zipWith3 RamInputs ramIns hiNewAddrs ramWrites)
 
     outputs    = rotRight rotVal (reverse ramOuts)
@@ -135,24 +135,24 @@ update o en xs s = do s.offset <== o
 example :: Octostack N18 -> Recipe
 example s = do s.update 3 (high +> high +> high +> 0) [4, 5, 6]
                tick -- PUSH [4, 5, 6]
-               s.update 2 (high +> high +> 0) [8, 9]
-               tick -- PUSH [8, 9]
-               s.update (-1) 0 []
-               tick -- POP 1
-               s.update 4 (high +> high +> high +> high +> 0) [1, 2, 1, 2]
-               tick -- PUSH [1, 2, 1, 2]
-               s.update 4 (high +> high +> high +> high +> 0) [6, 7, 6, 7]
-               tick -- PUSH [6, 7, 6, 7]
-               s.update (-3) 0 []
-               tick -- POP 3
-               s.update (-2) (high +> 0) [10]
-               tick -- POP 3, PUSH [10]
-               s.update 2 (high +> high +> 0) [8, 9]
-               tick -- PUSH [8, 9]
-               s.update 0 (high +> 0) [55]
-               tick -- PUSH [8, 9]
-               tick
-               tick
+               -- s.update 2 (high +> high +> 0) [8, 9]
+               -- tick -- PUSH [8, 9]
+               -- s.update (-1) 0 []
+               -- tick -- POP 1
+               -- s.update 4 (high +> high +> high +> high +> 0) [1, 2, 1, 2]
+               -- tick -- PUSH [1, 2, 1, 2]
+               -- s.update 4 (high +> high +> high +> high +> 0) [6, 7, 6, 7]
+               -- tick -- PUSH [6, 7, 6, 7]
+               -- s.update (-3) 0 []
+               -- tick -- POP 3
+               -- s.update (-2) (high +> 0) [10]
+               -- tick -- POP 3, PUSH [10]
+               -- s.update 2 (high +> high +> 0) [8, 9]
+               -- tick -- PUSH [8, 9]
+               -- s.update 0 (high +> 0) [55]
+               -- tick -- PUSH [8, 9]
+               -- tick
+               -- tick
 
 
 simExample = simRecipe (newOctostack "example_" id) example tops

@@ -1,0 +1,14 @@
+dist-newstyle/
+emulator/emu
+emulator/emu-32-bit
+flite/dist/
+fpga/*.hi
+fpga/*.o
+fpga/Red
+ghc-flite/src/Main
+ghc-flite/test/.ipynb_checkpoints
+red-lava/dist/
+red-lava/modules/*.hi
+red-lava/modules/*.o
+red-lava/modules/Lava/*.hi
+red-lava/modules/Lava/*.o

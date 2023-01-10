@@ -11,7 +11,10 @@ module Lava.Vhdl
 import Lava.Bit
 import Lava.Binary
 import System.Process
+import Numeric (showHex)
 
+hexify :: [Integer] -> String
+hexify = unlines . map (flip showHex "")
 
 vhdlGumpth :: String
 vhdlGumpth = unlines $
@@ -25,6 +28,8 @@ vhdlGumpth = unlines $
   , "use unisim.vcomponents.all;"
   , "library unimacro;"
   , "use unimacro.vcomponents.all;"
+  , "library xpm;"
+  , "use xpm.vcomponents.all;"
   , ""
   , "use work.all;"
   , ""
@@ -101,65 +106,6 @@ xc6vlx75t =
   , partSpeedGrade = "-2"
   }
 
-ramFile :: Part -> String -> String -> [Parameter] -> String
-ramFile part name ramType params = unlines commands
-  where
-    init = read (lookupParam params "init") :: [Integer]
-    dwidth = read (lookupParam params "dwidth") :: Int
-    awidth = read (lookupParam params "awidth") :: Int
-    primType = lookupParam params "primtype"
-
-    coeFile = if null init then "no_coe_file_loaded"
-                           else "init_" ++ name ++ ".txt"
-
-    commands =
-      ["set script_path [ file dirname [ file normalize [ info script ] ] ]"
-      ,"set prj_dir [get_property DIRECTORY [current_project]]"
-      ,"set prj_name [get_property NAME [current_project]]"
-      ,"set xci_file $prj_dir/$prj_name.srcs/sources_1/ip/"++name++"/"++name++".xci"
-      ,"create_ip -name blk_mem_gen -vendor xilinx.com -library ip -version 8.4 -module_name " ++ show name
-      ,"set_property -dict [list \\"
-      ,"    CONFIG.Memory_Type {" ++ (if ramType == "ram"
-                                        then "Single_Port_RAM"
-                                        else "True_Dual_Port_RAM") ++ "}\\"
-      ,"    CONFIG.Algorithm {" ++ (if null primType
-                                      then "Minimum_Area"
-                                      else "Fixed_Primitives") ++ "}\\"
-      ,"    CONFIG.Primitive {" ++ (if null primType
-                                      then "8kx2"
-                                      else primType) ++ "}\\"
-      ,"    CONFIG.Write_Width_A {" ++ show dwidth ++ "}\\"
-      ,"    CONFIG.Write_Depth_A {" ++ show (2^awidth) ++ "}\\"
-      ,"    CONFIG.Read_Width_A {" ++ show dwidth ++ "}\\"
-      ,"    CONFIG.Write_Width_B {" ++ show dwidth ++ "}\\"
-      ,"    CONFIG.Read_Width_B {" ++ show dwidth ++ "}\\"
-      ,"    CONFIG.Load_Init_File {" ++ (if coeFile == "no_coe_file_loaded"
-                                           then "false"
-                                           else "true") ++ "}\\"
-      ,"    CONFIG.Coe_File \"$script_path/" ++ coeFile ++ "\"\\"
-      ,"    CONFIG.PRIM_type_to_Implement {BRAM}\\"
-      ,"    CONFIG.Enable_32bit_Address {false}\\"
-      ,"    CONFIG.Use_Byte_Write_Enable {false}\\"
-      ,"    CONFIG.Byte_Size {9}\\"
-      ,"    CONFIG.Assume_Synchronous_Clk {true}\\"
-      ,"    CONFIG.Operating_Mode_A {WRITE_FIRST}\\"
-      ,"    CONFIG.Enable_A {Always_Enabled}\\"
-      ,"    CONFIG.Operating_Mode_B {WRITE_FIRST}\\"
-      ,"    CONFIG.Enable_B {Always_Enabled}\\"
-      ,"    CONFIG.Register_PortA_Output_of_Memory_Primitives {false}\\"
-      ,"    CONFIG.Register_PortB_Output_of_Memory_Primitives {false}\\"
-      ,"    CONFIG.Use_RSTA_Pin {false}\\"
-      ,"    CONFIG.Use_RSTB_Pin {false}\\"
-      ,"    CONFIG.Port_A_Write_Rate {100}\\"
-      ,"    CONFIG.Port_B_Clock {100}\\"
-      ,"    CONFIG.Port_B_Write_Rate {100}\\"
-      ,"    CONFIG.Port_B_Enable_Rate {100}\\"
-      ,"    CONFIG.use_bram_block {Stand_Alone}\\"
-      ,"    CONFIG.EN_SAFETY_CKT {false}] [get_ips " ++ name ++ "]"
-      ,"generate_target all [get_ips " ++ name ++ "]"
-      ,"update_compile_order -fileset sources_1"
-      ]
-
 vhdlDecls :: Netlist -> String
 vhdlDecls nl =
      (consperse ",\n"
@@ -219,11 +165,9 @@ vhdlArch f name nl =
 
 ramFiles :: Part -> Netlist -> [(String, String)]
 ramFiles part nl = concat
-    [ (ramName ++ ".tcl", ramFile part ramName (netName net) params)
-      :
-      if nonEmpty params then
-         [("init_" ++ ramName ++ ".txt", genCoeFile params)]
-      else
+    [if nonEmpty params then
+         [("init_" ++ ramName ++ ".mem", genCoeFile params)]
+        else
          []
     | net <- nets nl
     , netName net == "ram" || netName net == "dualRam"
@@ -235,11 +179,7 @@ ramFiles part nl = concat
     nonEmpty params = not (null init)
       where init = read (lookupParam params "init") :: [Integer]
 
-    genCoeFile params =
-         "memory_initialization_radix = 10;\n"
-      ++ "memory_initialization_vector = "
-      ++ (unwords $ map show init)
-      ++ ";\n"
+    genCoeFile params = hexify init
      where init = read (lookupParam params "init") :: [Integer]
 
 vhdl :: Part -> String -> Netlist -> [(String, String)]
@@ -393,46 +333,118 @@ busMap :: String -> [Wire] -> [String]
 busMap port signals =
   zipWith (\i s -> port ++ "(" ++ show i ++ ") => " ++ wireStr s) [0..] signals
 
-instRam params comp (we:sigs) =
-    compStr comp ++ " : entity ram_" ++ compStr comp ++ " "
-                 ++ " port map ("
-                 ++ " clka => clock, "
-                 ++ argList (busMap "dina" dbus1) ++ ","
-                 ++ argList (busMap "addra" abus1) ++ ","
-                 ++ " wea(0) => " ++ wireStr we ++ ","
-                 ++ argList (busMap "douta" outs1)
-                 ++ ");\n"
+instRam params comp (we:sigs) = unlines commands
   where
     init = read (lookupParam params "init") :: [Integer]
     dwidth = read (lookupParam params "dwidth") :: Int
     awidth = read (lookupParam params "awidth") :: Int
-    primType = lookupParam params "primtype"
-
+    resourceType = lookupParam params "resourceType"
+    coeFile = if null init then "none"
+                           else "init_ram_" ++ compStr comp ++ ".mem"
     (dbus1, abus1) = splitAt dwidth sigs
     outs1          = map ((,) comp) [0..dwidth-1]
 
-instRam2 params comp (we1:we2:sigs) =
-    compStr comp ++ " : entity ram_" ++ compStr comp ++ " "
-                 ++ " port map ("
-                 ++ " clka => clock, "
-                 ++ argList (busMap "dina" dbus1) ++ ","
-                 ++ argList (busMap "addra" abus1) ++ ","
-                 ++ " wea(0) => " ++ wireStr we1 ++ ","
-                 ++ argList (busMap "douta" outs1) ++ ","
-                 ++ " clkb => clock, "
-                 ++ argList (busMap "dinb" dbus2) ++ ","
-                 ++ argList (busMap "addrb" abus2) ++ ","
-                 ++ " web(0) => " ++ wireStr we2 ++ ","
-                 ++ argList (busMap "doutb" outs2)
-                 ++ ");\n"
+    commands =
+      [compStr comp ++ " : xpm_memory_spram generic map ("
+      ,"  ADDR_WIDTH_A => " ++ show awidth ++ ","
+      ,"  AUTO_SLEEP_TIME => 0,"
+      ,"  BYTE_WRITE_WIDTH_A => " ++ show dwidth ++ ","
+      ,"  ECC_MODE => \"no_ecc\","
+      ,"  MEMORY_INIT_FILE => " ++ show coeFile ++ ","
+      ,"  MEMORY_OPTIMIZATION => \"true\","
+      ,"  MEMORY_PRIMITIVE => " ++ show resourceType ++ ","
+      ,"  MEMORY_SIZE => " ++ show (dwidth * 2^awidth) ++ ","
+      ,"  MESSAGE_CONTROL => 0,"
+      ,"  READ_DATA_WIDTH_A => " ++ show dwidth ++ ","
+      ,"  READ_LATENCY_A => 1,"
+      ,"  RST_MODE_A => \"SYNC\","
+      ,"  USE_MEM_INIT => " ++ (if null init
+                                  then "0,"
+                                  else "1,")
+      ,"  WAKEUP_TIME => \"disable_sleep\","
+      ,"  WRITE_DATA_WIDTH_A => " ++ show dwidth ++ ","
+      ,"  WRITE_MODE_A => \"write_first\")"
+
+      ,"  port map ("
+      , " clka => clock, "
+      , "  " ++ argList (busMap "dina" dbus1) ++ ","
+      , "  " ++ argList (busMap "addra" abus1) ++ ","
+      , "  wea(0) => " ++ wireStr we ++ ","
+      , "  " ++ argList (busMap "douta" outs1) ++ ","
+      , "  injectdbiterra => '0', "
+      , "  injectsbiterra => '0', "
+      , "  regcea => '0', "
+      , "  rsta => '0', "
+      , "  sleep => '0', "
+      , "  ena => '1' "
+      , ");"
+      ]
+
+instRam2 params comp (we1:we2:sigs) = unlines commands
   where
     init = read (lookupParam params "init") :: [Integer]
     dwidth = read (lookupParam params "dwidth") :: Int
     awidth = read (lookupParam params "awidth") :: Int
-    primType = lookupParam params "primtype"
-
+    resourceType = lookupParam params "resourceType"
+    coeFile = if null init then "none"
+                           else "init_ram_" ++ compStr comp ++ ".mem"
     (dbus, abus)   = splitAt (2*dwidth) sigs
     (abus1, abus2) = splitAt awidth abus
     (dbus1, dbus2) = splitAt dwidth dbus
     outs1          = map ((,) comp) [0..dwidth-1]
     outs2          = map ((,) comp) [dwidth..dwidth*2-1]
+
+    commands =
+      [compStr comp ++ " : xpm_memory_tdpram generic map ("
+      ,"  AUTO_SLEEP_TIME => 0,"
+      ,"  ECC_MODE => \"no_ecc\","
+      ,"  MEMORY_INIT_FILE => " ++ show coeFile ++ ","
+      ,"  MEMORY_OPTIMIZATION => \"true\","
+      ,"  MEMORY_PRIMITIVE => " ++ show resourceType ++ ","
+      ,"  MEMORY_SIZE => " ++ show (dwidth * 2^awidth) ++ ","
+      ,"  MESSAGE_CONTROL => 0,"
+      ,"  ADDR_WIDTH_A => " ++ show awidth ++ ","
+      ,"  BYTE_WRITE_WIDTH_A => " ++ show dwidth ++ ","
+      ,"  READ_DATA_WIDTH_A => " ++ show dwidth ++ ","
+      ,"  READ_LATENCY_A => 1,"
+      ,"  RST_MODE_A => \"SYNC\","
+      ,"  WRITE_DATA_WIDTH_A => " ++ show dwidth ++ ","
+      ,"  WRITE_MODE_A => " ++ show (if resourceType == "ultra" then "no_change" else "write_first") ++  ","
+      ,"  ADDR_WIDTH_B => " ++ show awidth ++ ","
+      ,"  BYTE_WRITE_WIDTH_B => " ++ show dwidth ++ ","
+      ,"  READ_DATA_WIDTH_B => " ++ show dwidth ++ ","
+      ,"  READ_LATENCY_B => 1,"
+      ,"  RST_MODE_B => \"SYNC\","
+      ,"  WRITE_DATA_WIDTH_B => " ++ show dwidth ++ ","
+      ,"  WRITE_MODE_B => " ++ show (if resourceType == "ultra" then "no_change" else "write_first") ++  ","
+      ,"  USE_MEM_INIT => " ++ (if null init
+                                  then "0,"
+                                  else "1,")
+      ,"  WAKEUP_TIME => \"disable_sleep\","
+      ,"  CLOCKING_MODE => \"common_clock\"" -- Allows URAM inference
+      ,"  )"
+
+      ,"  port map ("
+      , " clka => clock, "
+      , "  " ++ argList (busMap "dina" dbus1) ++ ","
+      , "  " ++ argList (busMap "addra" abus1) ++ ","
+      , "  wea(0) => " ++ wireStr we1 ++ ","
+      , "  " ++ argList (busMap "douta" outs1) ++ ","
+      , "  injectdbiterra => '0', "
+      , "  injectsbiterra => '0', "
+      , "  regcea => '0', "
+      , "  rsta => '0', "
+      , "  ena => '1', "
+      , " clkb => clock, "
+      , "  " ++ argList (busMap "dinb" dbus2) ++ ","
+      , "  " ++ argList (busMap "addrb" abus2) ++ ","
+      , "  web(0) => " ++ wireStr we2 ++ ","
+      , "  " ++ argList (busMap "doutb" outs2) ++ ","
+      , "  injectdbiterrb => '0', "
+      , "  injectsbiterrb => '0', "
+      , "  regceb => '0', "
+      , "  rstb => '0', "
+      , "  sleep => '0', "
+      , "  enb => '1' "
+      , ");"
+      ]
