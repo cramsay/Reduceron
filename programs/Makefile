@@ -63,6 +63,12 @@ regress-flite-c-comp: $(patsubst %,%.flite-c-comp-checked,$(WORKLOADS))
 %.flite-comp-checked: %.hs $(EMU) $(FLITE)
 	$(FLITE) $(FLITE_OPTS) $(FLITE_RED) $< | $(EMU) - | diff -u $(patsubst %.hs,gold/run/%.out,$<) - && touch $@
 
+flite-comp-profile: $(patsubst %,%.flite-comp-profile,$(WORKLOADS))
+
+%.flite-comp-profile: %.hs $(EMU) $(FLITE)
+	$(FLITE) $(FLITE_OPTS) $(FLITE_RED) $< | $(EMU) -p - > $@
+
+
 %.c: %.hs $(FLITE)
 	$(FLITE) $(FLITE_OPTS) -c $< > $@
 
