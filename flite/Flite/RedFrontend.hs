@@ -4,6 +4,7 @@ import Flite.LambdaLift
 import Flite.Syntax
 import Flite.Traversals
 import Flite.ConcatApp
+import Flite.Dependency
 import Flite.Matching
 import Flite.Case
 import Flite.Let
@@ -40,8 +41,16 @@ frontendM strictAnan nregs (h, i) p =
              >>= return . concatApps
              >>= return . strictifyPrim
              >>= return . concatApps
+             >>= return . elimDeadFuns
      return p1
 
+elimDeadFuns :: Prog -> Prog
+elimDeadFuns p = [ Func f args rhs | (Func f args rhs) <- p, f `elem` alives ]
+  where
+    alives = case lookup "main" cg of
+      Nothing -> error $ "No main function when eliminating dead code"
+      Just xs -> "main":xs
+    cg = closure (maybeCallGraph p)
 
 concApps :: Int -> Prog -> Prog
 concApps 0 = concatApps

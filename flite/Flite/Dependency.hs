@@ -2,6 +2,7 @@ module Flite.Dependency
   ( DepGraph     -- type DepGraph = [(Id, [Id])]
   , depends      -- :: DepGraph -> Id -> [Id]
   , callGraph    -- :: [Decl] -> DepGraph
+  , maybeCallGraph -- :: [Decl] -> DepGraph
   , letGraph     -- :: [Binding] -> DepGraph
   , closure      -- :: DepGraph -> DepGraph
   , callGroups   -- :: [Decl] -> [[Decl]]
@@ -41,6 +42,14 @@ callGraph p = (zip fs cs)
   where
     fs = map funcName p
     cs = map (nub . calls . funcRhs) p
+
+-- For each function, determine all functions it _might_ call
+-- (includes case alternatives)
+maybeCallGraph :: [Decl] -> DepGraph
+maybeCallGraph p = (zip fs cs)
+  where
+    fs = map funcName p
+    cs = map (nub . maybeCalls . funcRhs) p
 
 -- Strongly connected components, in dependency order
 components :: DepGraph -> [[Id]]

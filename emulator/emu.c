@@ -1358,6 +1358,7 @@ int main(int argc, char *argv[])
              (100*prsSuccessCount)/(1+prsCandidateCount));
       printf("#GCs        = %12d\n", gcCount);
       printf("#Cases      = %12lld\n", caseCount);
+      printf("#Templates  = %12d\n", numTemplates);
       printf("Max Heap    = %12d\n", maxHeapUsage);
       printf("Max Stack   = %12d\n", maxStackUsage);
       printf("Max UStack  = %12d\n", maxUStackUsage);

@@ -78,6 +78,11 @@ calls :: Exp -> [Id]
 calls (Fun f) = [f]
 calls e = extract calls e
 
+maybeCalls :: Exp -> [Id]
+maybeCalls (Fun f) = [f]
+maybeCalls (Alts fs _) = fs
+maybeCalls e = extract maybeCalls e
+
 lookupFuncs :: Id -> Prog -> [Decl]
 lookupFuncs f p = [Func g args rhs | Func g args rhs <- p, f == g]
 
