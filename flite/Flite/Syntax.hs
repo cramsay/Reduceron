@@ -1,4 +1,8 @@
 module Flite.Syntax where
+
+import Data.List (stripPrefix)
+import Data.Maybe (fromMaybe)
+
 type Prog = [Decl]
 
 data Decl = Func { funcName :: Id
@@ -43,29 +47,44 @@ type App = [Exp]
 
 -- Primitive functions
 
+unswapPrim :: Id -> Id
+unswapPrim p = fromMaybe p (stripPrefix "swap:" p)
+
 isPrimId :: Id -> Bool
 isPrimId p = isBinaryPrim p || isUnaryPrim p || isTernaryPrim p
 
 isBinaryPrim :: Id -> Bool
-isBinaryPrim "(+)"  = True
-isBinaryPrim "(-)"  = True
-isBinaryPrim "(==)" = True
-isBinaryPrim "(/=)" = True
-isBinaryPrim "(<=)" = True
-isBinaryPrim "(.&.)"  = True
-isBinaryPrim "ld32"  = True
-isBinaryPrim _      = False
+isBinaryPrim = go . unswapPrim
+  where
+    go "(+)"  = True
+    go "(-)"  = True
+    go "(==)" = True
+    go "(/=)" = True
+    go "(<=)" = True
+    go "(.&.)"  = True
+    go "ld32"  = True
+    go _      = False
+
 
 isUnaryPrim :: Id -> Bool
-isUnaryPrim "(!)"  = True
-isUnaryPrim "emit" = True
-isUnaryPrim "emitInt" = True
-isUnaryPrim _ = False
+isUnaryPrim = go . unswapPrim
+  where
+    go "(!)"  = True
+    go "emit" = True
+    go "emitInt" = True
+    go _ = False
 
 isTernaryPrim :: Id -> Bool
-isTernaryPrim "st32" = True
-isTernaryPrim ('s':'w':'a':'p':':':f) = isTernaryPrim f
-isTernaryPrim _ = False
+isTernaryPrim = go . unswapPrim
+  where
+    go "st32" = True
+    go _ = False
+
+primArity :: Id -> Int
+primArity p
+  | isUnaryPrim p = 1
+  | isBinaryPrim p = 2
+  | isTernaryPrim p = 3
 
 isPredexId :: Id -> Bool
 isPredexId = isBinaryPrim

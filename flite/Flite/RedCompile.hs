@@ -87,12 +87,8 @@ trApp p d app
   | null luts = R.APP (isNormal rest) rest
   | otherwise = R.CASE (head luts) rest
   where
-    app' = rearrange app
     luts = map (trAlt p d . getAlts) $ filter isAlts app
-    rest = map (tr p d) $ filter (not . isAlts) app'
-
-rearrange (Prim p:x:y:rest) = x:Prim p:y:rest
-rearrange app = app
+    rest = map (tr p d) $ filter (not . isAlts) app
 
 indexOf p f =
   case [i | ((g, args, rhs), i) <- zip p [0..], f == g] of
@@ -102,8 +98,6 @@ indexOf p f =
 isNormal (R.CON n c:rest) = length rest <= n
 isNormal (R.FUN b n f:rest) = length rest < n
 isNormal _ = False
-
-primArity f = if isTernaryPrim f then 3 else 2
 
 tr p d (Int i) = R.INT i
 tr p d (Prim f) = R.PRI (primArity f) f
