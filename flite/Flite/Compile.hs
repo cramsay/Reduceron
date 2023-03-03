@@ -36,7 +36,8 @@ toNode f p (Var v) =
     Just i -> ARG i
   where args = head [args | (g, args, rhs) <- p, f == g]
 toNode f p (Ctr c n i) = FUN (n+1) (funId c)
-toNode f p (Alts fs _) = FUN 0 (funId $ head fs)
+toNode f p (Alts (AFuns fs) _) = FUN 0 (funId $ head fs)
+toNode f p (Alts (AInline as) _) = error "Flite.Compiler.toNode: Inline alts not implemented"
 toNode f p (Int i) = INT i
 toNode f p Bottom = FUN 0 "_|_"
 

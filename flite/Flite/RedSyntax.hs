@@ -22,10 +22,13 @@ type Normal = Bool
 
 type RegId = Int
 
-data App = APP Normal [Atom] | CASE Id [Atom] | PRIM RegId [Atom]
+data App = APP Normal [Atom] | CASE LUT [Atom] | PRIM RegId [Atom]
   deriving (Show, Read)
 
-type LUT = Int
+data LUT = LOffset Int
+         | LInline [(Int, Atom)]
+  deriving (Show, Read)
+
 
 type Template = (String, Int, [LUT], [Atom], [App])
 

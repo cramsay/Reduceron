@@ -42,7 +42,8 @@ app xs = foldl1 (:@) xs
 val :: Exp -> Val
 val (App e xs) = app (val e : map val xs)
 val (Var v) = V v
-val (Alts as _) = lut (map F as)
+val (Alts (AFuns as) _) = lut (map F as)
+val (Alts (AInline as) _) = error ("Flite.Interp.val: Inline alts not implemented")
 val (Ctr s arity i) = C s arity i []
 val (Fun f) = F f
 val (Int n) = N n
