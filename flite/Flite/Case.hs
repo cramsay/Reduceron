@@ -1,4 +1,4 @@
-module Flite.Case (caseElim, caseElimWithCaseStack) where
+module Flite.Case (caseElim, caseElimWithCaseStack, Family, families, familyTable) where
 
 import Flite.Syntax
 import Flite.Traversals

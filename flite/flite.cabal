@@ -35,4 +35,5 @@ Executable flite
                     Flite.Traversals, Flite.Writer, Flite.Writer, Flite.WriterState,
                     Flite.Parsec.Parse, Flite.Parsec.Flite, Flite.Parsec.Prelude,
                     Flite.Dependency, Flite.IntInfer, Flite.Strictness, Flite.WorkerWrapper,
+                    Flite.PrettyHaskell,
                     Paths_flite

@@ -9,6 +9,7 @@ import Flite.Interp
 import Flite.Inline
 import Flite.Compile
 import Flite.RedCompile
+import qualified Flite.PrettyHaskell as PH
 import Data.List
 import System.IO
 import System.Environment
@@ -16,6 +17,7 @@ import System.Console.GetOpt
 
 data Flag =
     Desugar
+  | Translate
   | CompileToC
   | CompileToRed Int Int Int Int Int
   | InlineH (Maybe Int)
@@ -33,6 +35,7 @@ isDisjoint flag = True
 options :: [OptDescr Flag]
 options =
   [ Option ['d'] [] (NoArg Desugar) "desugar"
+  , Option ['t'] [] (NoArg Translate) "translate"
   , Option ['c'] [] (NoArg CompileToC) "compile to C"
   , Option ['r'] [] (OptArg red "MAXPUSH:APSIZE:MAXAPS:MAXLUTS:MAXREGS")
                     "compile to Reduceron templates"
@@ -76,6 +79,8 @@ run flags fileName =
                print res
              else
                putStrLn (showEmitOnly res)
+       [Translate] ->
+         putStrLn $ PH.pretty p
        [Desugar] ->
          putStrLn $ pretty $ frontend (inlineFlagH, inlineFlagI) p
        [CompileToC] -> putStrLn $ compile (inlineFlagH, inlineFlagI) p
