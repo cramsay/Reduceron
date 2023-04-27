@@ -40,6 +40,7 @@ showExp ind (Prim f) = f
 showExp ind (Con c)
   | c == "Cons" = "(:)"
   | c == "Nil"  = "[]"
+  | c == "Pair"  = "(,)"
   | otherwise = c
 showExp ind (Int i) = show i
 showExp ind Bottom = "undefined"
@@ -79,6 +80,8 @@ isPrelude fam
   | cons == ["Cons","Nil"] = True
   | cons == ["False","True"] = True
   | cons == ["EQ","GT","LT"] = True
+  | cons == ["Just","Nothing"] = True
+  | cons == ["Pair"] = True
   | otherwise = False
   where
     cons = map fst $ Set.toList fam
