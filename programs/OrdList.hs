@@ -37,7 +37,7 @@ boolList (S n) =
 top n = andList (append (map (prop True) (boolList n))
                         (map (prop False) (boolList n)));
 
-main = let { num = S (S (S (S Z))) } in
+main = let { num = S (S (S (S (S (S (S (S (S (S (S (S Z))))))))))) } in
          case top num of {
            False -> 0;
            True  -> 1;
