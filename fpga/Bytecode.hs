@@ -37,22 +37,22 @@ Assumptions:
 
 type HeapAddrN    = S ToSpaceAddrN
 type HeapAddr     = Word HeapAddrN
-type StackAddrN   = N10 -- KnuthBendix needs more than 512
+type StackAddrN   = N13 -- KnuthBendix needs more than 512
 type StackAddr    = Word StackAddrN
 type ArityN       = N3
 type Arity        = Word ArityN
 type FunAddrN     = N10
 type FunAddr      = Word FunAddrN
-type ToSpaceAddrN = N13  -- half of heap. HERE IT IS, THE MAIN PARAMETER.
+type ToSpaceAddrN = N14  -- half of heap. HERE IT IS, THE MAIN PARAMETER.
 type ToSpaceAddr  = Word ToSpaceAddrN
-type UStackAddrN  = N9 -- N6 should be enough
-type LStackAddrN  = N9 -- N9 should be enough
-type UpdateN      = N24 -- ew (UStackAddrN + HeapAddrN)
+type UStackAddrN  = N12 -- N6 should be enough
+type LStackAddrN  = N12 -- N9 should be enough
+type UpdateN      = N28 -- ew (UStackAddrN + HeapAddrN)
 
 -- In order to enlargen the integer range without affecting the heap
 -- size we break the previous assumption that pointers and integers
 -- are the same size.
-type NumberN      = S HeapAddrN
+type NumberN      = HeapAddrN -- S HeapAddrN
 type Number       = Word NumberN
 
 heapAddrN         = undefined :: HeapAddrN
@@ -144,7 +144,7 @@ pointer :: Atom -> HeapAddr
 pointer = vtake heapAddrN `o` snd `o` splitAtom
 
 makeAP :: Bit -> HeapAddr -> Atom
-makeAP s a = low +> high +> s +> (a <++> low +> vempty)
+makeAP s a = low +> high +> s +> (a <++> vempty)
 
 encodeAP :: Bool -> Integer -> Integer
 encodeAP s a = 2 .|. (boolToNum s `shiftL` 2) .|. (b `shiftL` 3)
