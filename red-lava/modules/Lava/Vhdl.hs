@@ -151,7 +151,7 @@ ramFile part name ramType params = unlines commands
       ,"    CONFIG.Use_RSTA_Pin {false}\\"
       ,"    CONFIG.Use_RSTB_Pin {false}\\"
       ,"    CONFIG.Port_A_Write_Rate {100}\\"
-      ,"    CONFIG.Port_B_Clock {100}\\"
+      ,"    CONFIG.Port_B_Clock $clkF\\"
       ,"    CONFIG.Port_B_Write_Rate {100}\\"
       ,"    CONFIG.Port_B_Enable_Rate {100}\\"
       ,"    CONFIG.use_bram_block {Stand_Alone}\\"

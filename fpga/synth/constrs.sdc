@@ -1,0 +1,1 @@
+create_clock -name clock -period [expr {1e3/$clkF}] [get_ports clock]
