@@ -15,11 +15,11 @@
 
 /* Compile-time options */
 
-#define MAXPUSH 17 //8
-#define APSIZE  9 //6
-#define MAXAPS  4 //4
-#define MAXLUTS 9 //2
-#define MAXREGS 9 // 8
+#define MAXPUSH 16 //8
+#define APSIZE  6 //6
+#define MAXAPS  2 //4
+#define MAXLUTS 1 //2
+#define MAXREGS 6 // 8
 
 #define MAXHEAPAPPS    32768
 #define MAXSTACKELEMS  8192
@@ -132,6 +132,7 @@ TCacheLine* tcache;
 Int hp, gcLow, gcHigh, sp, usp, lsp, end, gcCount;
 
 Int numTemplates;
+Int nodeLen = APSIZE;
 
 /* Profiling info */
 
@@ -625,14 +626,14 @@ void update(Atom top, Int saddr, Int haddr)
   //printf("Updating (%d,%d)\n", saddr, haddr);
 
   for (;;) {
-    if (len < APSIZE) {
+    if (len < nodeLen) {
       upd(top, p, len, haddr);
       usp--;
       return;
     }
     else {
-      upd(top, p, APSIZE, hp);
-      p -= APSIZE-1; len -= APSIZE-1;
+      upd(top, p, nodeLen, hp);
+      p -= nodeLen-1; len -= nodeLen-1;
       top.tag = VAR; top.contents.var.shared = 1; top.contents.var.id = hp;
       hp++;
     }
@@ -1223,7 +1224,7 @@ Bool parseApp(FILE *f, App *app)
     && perform(app->tag = PRIM)
     );
   if (!success) return 0;
-  app->size = parseAtoms(f, APSIZE, app->atoms);
+  app->size = parseAtoms(f, nodeLen, app->atoms);
   return 1;
 }
 
@@ -1290,7 +1291,8 @@ static void usage(void)
             "\n"
             "       -v -- enable verbosity\n"
             "       -t -- enable tracing\n"
-            "       -p -- enable profiling\n",
+            "       -p -- enable profiling\n"
+            "       -n{$NodeLen} -- restricts node length during updates\n",
             program_name);
 
     exit(EXIT_FAILURE);
@@ -1306,7 +1308,7 @@ int main(int argc, char *argv[])
 
   program_name = argv[0];
 
-  while ((ch = getopt(argc, argv, "vtp")) != -1) {
+  while ((ch = getopt(argc, argv, "vtpn:")) != -1) {
       switch (ch) {
       case 'v':
           verbose = 1;
@@ -1317,6 +1319,10 @@ int main(int argc, char *argv[])
       case 'p':
           profiling = 1;
           break;
+      case 'n':
+        nodeLen = atoi(optarg);
+        printf("Setting nodeLen to %d", nodeLen);
+        break;
       default:
           usage();
           break;
