@@ -137,7 +137,7 @@ Int nodeLen = APSIZE;
 /* Profiling info */
 
 Long swapCount, primCount, applyCount, unwindCount,
-     updateCount, selectCount, prsCandidateCount, prsSuccessCount, caseCount;
+  updateCount, selectCount, prsCandidateCount, prsSuccessCount, caseCount, heapWaitCount, inlineAltCount, heapAllocCount;
 
 Int maxHeapUsage, maxStackUsage, maxUStackUsage, maxLStackUsage;
 
@@ -632,6 +632,7 @@ void update(Atom top, Int saddr, Int haddr)
       return;
     }
     else {
+      heapAllocCount++;
       upd(top, p, nodeLen, hp);
       p -= nodeLen-1; len -= nodeLen-1;
       top.tag = VAR; top.contents.var.shared = 1; top.contents.var.id = hp;
@@ -797,6 +798,7 @@ void instApp(Int base, Int argPtr, App *app)
       for (i = 0; i < app->size; i++)
         new->atoms[i] = inst(base, argPtr, app->atoms[i]);
       cachedWrite(hp, *new);
+      heapAllocCount++;
       hp++;
     }
   }
@@ -808,6 +810,7 @@ void instApp(Int base, Int argPtr, App *app)
     if (app->tag == CASE) new->details.lut = app->details.lut;
     if (app->tag == AP) new->details.normalForm = app->details.normalForm;
     cachedWrite(hp, *new);
+    heapAllocCount++;
     hp++;
   }
 }
@@ -1366,6 +1369,7 @@ int main(int argc, char *argv[])
       printf("#GCs        = %12d\n", gcCount);
       printf("#Cases      = %12lld\n", caseCount);
       printf("#Templates  = %12d\n", numTemplates);
+      printf("#Allocs     = %12lld\n", heapAllocCount);
       printf("Max Heap    = %12d\n", maxHeapUsage);
       printf("Max Stack   = %12d\n", maxStackUsage);
       printf("Max UStack  = %12d\n", maxUStackUsage);
